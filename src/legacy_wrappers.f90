@@ -48,6 +48,9 @@ subroutine env2calc(env,calc,molin)
 
   cal%uhf = env%uhf
   cal%chrg = env%chrg
+  if (cal%id == jobtype%xtbsys) then
+    cal%binary = trim(env%ProgName)
+  end if
 !>-- obtain WBOs OFF by default
   cal%rdwbo = .false.
   cal%rddip = .false.
@@ -90,6 +93,9 @@ subroutine env2calc(env,calc,molin)
 
     cal2%chrg = cal%chrg
     cal2%uhf = cal%uhf
+    if (cal2%id == jobtype%xtbsys) then
+      cal2%binary = trim(env%ProgName)
+    end if
     if (env%gbsa) then
       cal2%solvmodel = cal%solvmodel
       cal2%solvent = cal%solvent

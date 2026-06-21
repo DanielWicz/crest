@@ -222,11 +222,11 @@ contains !> MODULE PROCEDURES START HERE
       case ('tblite')
         job%id = jobtype%tblite
       case ('gfn2','gfn2-xtb')
-        job%id = jobtype%tblite
-        job%tblitelvl = xtblvl%gfn2
+        job%id = jobtype%xtbsys
+        job%other = '--gfn 2'
       case ('gfn1','gfn1-xtb')
-        job%id = jobtype%tblite
-        job%tblitelvl = xtblvl%gfn1
+        job%id = jobtype%xtbsys
+        job%other = '--gfn 1'
       case ('ceh')
         job%id = jobtype%tblite
         job%tblitelvl = xtblvl%ceh

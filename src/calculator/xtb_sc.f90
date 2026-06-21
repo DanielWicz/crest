@@ -181,6 +181,16 @@ contains  !>--- Module routines start here
     if (allocated(calc%other)) then
       calc%systemcall = trim(calc%systemcall)//' '//trim(calc%other)
     end if
+    !>--- implicit solvation
+    if (allocated(calc%solvmodel).and.allocated(calc%solvent)) then
+      select case (trim(calc%solvmodel))
+      case ('gbsa','alpb','cpcm')
+        if (index(calc%systemcall,'--'//trim(calc%solvmodel)) .eq. 0) then
+          calc%systemcall = trim(calc%systemcall)//' --'//trim(calc%solvmodel)
+          calc%systemcall = trim(calc%systemcall)//' '//trim(calc%solvent)
+        end if
+      end select
+    end if
     !>--- don't miss the --grad flag!
     if (index(calc%systemcall,'-grad') .eq. 0) then
       calc%systemcall = trim(calc%systemcall)//' '//'--grad'

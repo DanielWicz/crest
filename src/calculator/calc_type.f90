@@ -1205,11 +1205,11 @@ contains  !>--- Module routines start here
     case ('gfn0','--gfn0')
       self%id = jobtype%gfn0
     case ('gfn2','--gfn2')
-      self%id = jobtype%tblite
-      self%tblitelvl = 2
+      self%id = jobtype%xtbsys
+      self%other = '--gfn 2'
     case ('gfn1','--gfn1')
-      self%id = jobtype%tblite
-      self%tblitelvl = 1
+      self%id = jobtype%xtbsys
+      self%other = '--gfn 1'
     case ('gp3')
       self%id = jobtype%turbomole
       self%rdgrad = .false.
