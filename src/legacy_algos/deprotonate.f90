@@ -159,6 +159,7 @@ subroutine deprotonate_legacy(env,tim)
 
 
      call cosort(outnam,'deprotonated.xyz',.false.,.false.)
+     call rescore_protomer_ensemble(env,'deprotonated.xyz')
      call sort_ens(deprot,'deprotonated.xyz',.true.)
      call tim%stop(2)
 
@@ -224,4 +225,3 @@ subroutine deprot_correction(env,iname)
 
     return
 end subroutine deprot_correction
-

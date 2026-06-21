@@ -182,6 +182,7 @@ subroutine protonate_legacy(env,tim)
 
   !call rename(outnam,'protonated.xyz')
   call cosort(outnam,'protonated.xyz',.false.,.false.)
+  call rescore_protomer_ensemble(env,'protonated.xyz')
   call sort_ens(prot,'protonated.xyz',.true.)
   call tim%stop(2)
 
@@ -396,3 +397,78 @@ subroutine prot_correction(env,iname)
 
   return
 end subroutine prot_correction
+
+!--------------------------------------------------------------------------------------------
+! Recalculate final protomer ensemble energies with the selected external xTB binary.
+!--------------------------------------------------------------------------------------------
+subroutine rescore_protomer_ensemble(env,iname)
+  use crest_parameters
+  use crest_data
+  use iomod
+  use strucrd,only:rdensembleparam,rdensemble,wrensemble,wrxyz
+  implicit none
+  type(systemdata),intent(in) :: env
+  character(len=*),intent(in) :: iname
+
+  character(len=*),parameter :: tmpxyz = '.crest_rescore.xyz'
+  character(len=*),parameter :: tmpout = '.crest_rescore.out'
+  character(len=:),allocatable :: jobcall
+
+  integer :: nat,nall,i,io,nok,nfail
+  integer,allocatable :: at(:)
+  real(wp),allocatable :: xyz(:,:,:)
+  real(wp),allocatable :: eread(:)
+  real(wp) :: energy
+  logical :: ex
+
+  call rdensembleparam(iname,nat,nall)
+  if (nall < 1) return
+
+  allocate (xyz(3,nat,nall),eread(nall),at(nat))
+  call rdensemble(iname,nat,nall,at,xyz,eread)
+
+  write (*,'(1x,a)',advance='no') 'Rescoring final ensemble with external xTB ... '
+  nok = 0
+  nfail = 0
+  do i = 1,nall
+    call remove(tmpxyz)
+    call remove(tmpout)
+    call remove('energy')
+    if (.not.env%chargesfile) call remove('charges')
+    call remove('xtbrestart')
+
+    call wrxyz(tmpxyz,nat,at,xyz(:,:,i))
+    jobcall = 'timeout 600 '//trim(env%ProgName)//' '//tmpxyz//' --sp '//trim(env%gfnver)// &
+    & ' '//trim(env%solv)
+    if (env%chrg /= 0) jobcall = trim(jobcall)//' --chrg '//to_str(env%chrg)
+    if (env%uhf /= 0) jobcall = trim(jobcall)//' --uhf '//to_str(env%uhf)
+    jobcall = trim(jobcall)//' > '//tmpout//' 2>/dev/null'
+
+    call command(trim(jobcall),io)
+    inquire (file=tmpout,exist=ex)
+    if (ex) then
+      call grepval(tmpout,'| TOTAL ENERGY',ex,energy)
+      if (.not.ex) call grepval(tmpout,'total energy',ex,energy)
+    end if
+
+    if (ex) then
+      eread(i) = energy
+      nok = nok+1
+    else
+      nfail = nfail+1
+    end if
+  end do
+
+  call wrensemble(iname,nat,nall,at,xyz,eread)
+  write (*,'(i0,a,i0,a)') nok,'/',nall,' structures updated.'
+  if (nfail > 0) write (*,'(1x,a,i0,a)') 'Warning: xTB single point failed for ',nfail,' structures.'
+
+  call remove(tmpxyz)
+  call remove(tmpout)
+  call remove('energy')
+  if (.not.env%chargesfile) call remove('charges')
+  call remove('xtbrestart')
+  deallocate (at,eread,xyz)
+
+  return
+end subroutine rescore_protomer_ensemble
