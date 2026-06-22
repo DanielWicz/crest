@@ -60,6 +60,11 @@ subroutine sort_ens(sort,infile,verbose)
   & nfrag => sort%nfrag,threshsort => sort%threshsort)
 
     call rdensembleparam(infile,n,nall)
+    if (n <= 0 .or. nall <= 0) then
+      write (ochan,'(1x,a,a,a)') &
+      & 'Warning: ensemble file <',trim(infile),'> contains no structures; skipping sort.'
+      return
+    endif
     allocate (xyz(3,n,nall),eread(nall),at(n),xyz_new(3,n,nall),e_new(nall))
     call rdensemble(infile,n,nall,at,xyz,eread)
 

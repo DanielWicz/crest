@@ -41,7 +41,7 @@ subroutine deprotonate_legacy(env,tim)
       use crest_parameters
       use crest_data
       use iomod
-      use strucrd, only: rdnat,rdcoord,i2e
+      use strucrd, only: rdnat,rdcoord,i2e,rdensembleparam
       use utilities
       implicit none
       type(systemdata) :: env
@@ -58,7 +58,7 @@ subroutine deprotonate_legacy(env,tim)
       character(len=128) :: inpnam,outnam
 
       integer :: ich
-      integer :: natp,nallout,refchrg
+      integer :: natp,nallout,refchrg,natout
 
 !--- printout & clean directory
       call deprotclean
@@ -127,6 +127,13 @@ subroutine deprotonate_legacy(env,tim)
         endif
         deprot%ewin=deprot%ewin*3.0d0
         call sort_ens(deprot,outnam,.false.)
+        call rdensembleparam(outnam,natout,nallout)
+        if(nallout < 1)then
+          write(*,'(1x,a)') 'No deprotonated structures survived crude pre-optimization.'
+          write(*,'(1x,a)') 'No deprotonated.xyz ensemble will be written.'
+          call tim%stop(2)
+          goto 1000
+        endif
         call remaining_in(outnam,deprot%ewin,nallout) !--- remaining number of structures
         write(*,*)
 
@@ -141,6 +148,13 @@ subroutine deprotonate_legacy(env,tim)
         endif
         deprot%ewin=deprot%ewin*(2.0d0/3.0d0)
         call sort_ens(deprot,outnam,.false.)
+        call rdensembleparam(outnam,natout,nallout)
+        if(nallout < 1)then
+          write(*,'(1x,a)') 'No deprotonated structures survived loose optimization.'
+          write(*,'(1x,a)') 'No deprotonated.xyz ensemble will be written.'
+          call tim%stop(2)
+          goto 1000
+        endif
         call remaining_in(outnam,deprot%ewin,nallout) !--- remaining number of structures
         write(*,*)
 
@@ -155,6 +169,13 @@ subroutine deprotonate_legacy(env,tim)
         endif
         deprot%ewin=deprot%ewin/2.0d0
         call sort_ens(deprot,outnam,.false.)
+        call rdensembleparam(outnam,natout,nallout)
+        if(nallout < 1)then
+          write(*,'(1x,a)') 'No deprotonated structures survived final optimization.'
+          write(*,'(1x,a)') 'No deprotonated.xyz ensemble will be written.'
+          call tim%stop(2)
+          goto 1000
+        endif
         call remaining_in(outnam,deprot%ewin,nallout) !--- remaining number of structures
 
 
@@ -174,6 +195,7 @@ subroutine deprotonate_legacy(env,tim)
      endif
 
 !--- reset data for main dir
+1000 continue
      env%chrg = refchrg
      if(env%chrg .eq. 0) then
        call remove('.CHRG')
