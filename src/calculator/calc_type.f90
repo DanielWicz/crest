@@ -1214,15 +1214,17 @@ contains  !>--- Module routines start here
       self%id = jobtype%turbomole
       self%rdgrad = .false.
       self%binary = 'gp3'
-    case ('gxtb','gxtb_dev')
-      self%id = jobtype%turbomole 
-      self%rdgrad = .false.       
+    case ('gxtb')
+      !> g-xTB via the xtb binary (xtb --gxtb); mirrors the gfn2/gfn1 subprocess route
+      self%id = jobtype%xtbsys
+      self%other = '--gxtb'
+    case ('gxtb_dev')
+      !> legacy standalone g-xTB dev binary (grimme-lab), Turbomole-style job
+      self%id = jobtype%turbomole
+      self%rdgrad = .true.
       self%binary = 'gxtb'
       self%rdwbo = .false.
-      if(index(levelstring,'_dev').ne.0)then
-        self%other = '-grad'
-        self%rdgrad=.true.
-      endif  
+      self%other = '-grad'
     case ('orca')
       self%id = jobtype%orca
 

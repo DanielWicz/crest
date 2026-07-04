@@ -241,10 +241,14 @@ contains !> MODULE PROCEDURES START HERE
         job%id = jobtype%gfnff
       case ('pvol','libpvol','pv')
         job%id = jobtype%libpvol
-      case ('gxtb_dev')  
-        job%id = jobtype%turbomole 
-        job%rdgrad = .true.       
-        job%binary = 'gxtb' 
+      case ('gxtb')
+        !> g-xTB via the xtb binary (xtb --gxtb); mirrors the gfn2 subprocess route
+        job%id = jobtype%xtbsys
+        job%other = '--gxtb'
+      case ('gxtb_dev')
+        job%id = jobtype%turbomole
+        job%rdgrad = .true.
+        job%binary = 'gxtb'
         job%other ='-grad'
       case ('none')
         job%id = jobtype%unknown

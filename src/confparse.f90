@@ -1125,7 +1125,7 @@ subroutine parseflags(env,arg,nra)
         end select !> GFN
 
       case ('-gxtb')
-        call gxtb_dev_warning()
+        env%gfnver = 'gxtb'
       case ('-gxtb_dev')
         env%gfnver = 'gxtb_dev'
 
