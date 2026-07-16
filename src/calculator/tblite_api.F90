@@ -190,7 +190,7 @@ contains  !> MODULE PROCEDURES START HERE
     use tblite_container,only:container_type
     use tblite_solvation,only:new_solvation,tblite_solvation_type => solvation_type, &
     &                         solvent_data,get_solvent_data,solvation_input,  &
-    &                         cpcm_input,alpb_input,alpb_solvation, &
+    &                         ddx_input,ddx_solvation_model,alpb_input,alpb_solvation, &
     &                         cds_input,new_solvation_cds,shift_input,new_solvation_shift
 #endif
     implicit none
@@ -266,8 +266,9 @@ contains  !> MODULE PROCEDURES START HERE
       allocate (solv_inp%shift, source=shift_tmp)
     case ('cpcm')
       if (pr) call tblite%ctx%message("tblite> using CPCM/"//solvdum)
-      allocate (solv_inp%cpcm)
-      solv_inp%cpcm = cpcm_input(solv_data%eps)
+      allocate (solv_inp%ddx)
+      solv_inp%ddx = ddx_input(ddx_model=ddx_solvation_model%cpcm, &
+      & dielectric_const=solv_data%eps)
     case ('alpb')
       if (pr) call tblite%ctx%message("tblite> using ALPB/"//solvdum)
       alpb_tmp%dielectric_const = solv_data%eps
@@ -376,7 +377,7 @@ contains  !> MODULE PROCEDURES START HERE
       call ceh_singlepoint(tblite%ctx,tblite%calc,mctcmol,tblite%wfn, &
       &              tblite%accuracy,verbosity)
     case (xtblvl%eeq)
-      call eeq_guess(mctcmol,tblite%calc,tblite%wfn)
+      call eeq_guess(mctcmol,tblite%calc,tblite%wfn,error)
     end select
 
     if (tblite%ctx%failed()) then
