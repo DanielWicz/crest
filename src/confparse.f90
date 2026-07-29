@@ -37,6 +37,7 @@
 !>-----------------------------------------------
 subroutine parseflags(env,arg,nra)
   use iso_fortran_env,wp => real64
+  use crest_parameters,only:stderr
   use crest_data
   use crest_calculator
   use iomod
@@ -59,8 +60,10 @@ subroutine parseflags(env,arg,nra)
   integer :: i,j,k,l,io,ich,idum
   real(wp) :: rdum
   integer :: ctype
-  logical :: ex,bondconst
+  logical :: ex,bondconst,legacyreq
   character(len=:),allocatable :: argument
+!>--- methods that exist ONLY in the new (CREST >3.0) calculator routines
+  character(len=8),parameter :: modernonly(2) = (/character(8)::'gxtb','gxtb_dev'/)
 
   allocate (xx(10),floats(3),strings(3))
   ctmp = ''
@@ -2193,6 +2196,31 @@ subroutine parseflags(env,arg,nra)
 !>--- convert ProgName to absolute path (to make legacy routines more stable)
   ctmp = absolute_filepath(trim(env%ProgName))
   env%ProgName = ctmp
+
+!>--- resolve method/implementation conflicts.
+!>    Some methods are implemented only in the new (CREST >3.0) routines, while a
+!>    few runtypes still default to the legacy ones (see the "TODO, set active at
+!>    later version" cases above). The arguments are processed sequentially, so
+!>    this can only be settled once all of them have been read.
+  if (env%legacy.and.any(modernonly == trim(env%gfnver))) then
+    legacyreq = .false. !> was -legacy requested explicitly?
+    do i = 1,nra
+      if (any((/character(8)::'-legacy','--legacy'/) == trim(arg(i)))) legacyreq = .true.
+    end do
+    if (legacyreq) then
+      write (stderr,'(/,a,1x,a,1x,a)') '**ERROR** method',trim(env%gfnver), &
+      & 'is not implemented in the legacy (CREST <3.0) routines,'
+      write (stderr,'(a)') '          but -legacy was requested explicitly. Refusing to run.'
+      write (stderr,'(a)') '          Drop -legacy, or select one of the GFNn-xTB methods.'
+      flush (stderr)
+      error stop 1
+    else
+      write (stdout,'(/,a,1x,a,1x,a)') '> method',trim(env%gfnver), &
+      & 'is only implemented in the new (CREST >3.0) routines,'
+      write (stdout,'(a)') '> which are selected automatically for this runtype (as with -newversion)'
+      env%legacy = .false.
+    end if
+  end if
 
 !>--- for legacy runtypes, check if xtb is present
   if (env%legacy.or.env%QCG) then
