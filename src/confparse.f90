@@ -1244,7 +1244,9 @@ subroutine parseflags(env,arg,nra)
         !> Handled by the xtb binary, so it only affects the xtb subprocess
         !> routes (gfn1/gfn2/gfnff/gxtb), not the tblite/gfnff in-code APIs.
         env%draco = ''
-        atmp = adjustl(arg(i+1))
+        atmp = ''
+        !> the parameter set is optional, so -draco may be the last argument
+        if (nra .ge. (i+1)) atmp = adjustl(arg(i+1))
         if (atmp(1:1) .ne. '-'.and.atmp(1:1) .ne. ' ') then
           env%draco = trim(atmp)
         end if
