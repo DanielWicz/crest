@@ -66,18 +66,26 @@ contains  !> MODULE PROCEDURES START HERE
     integer,intent(in),optional :: iunit
     type(gfnff_data),allocatable,intent(inout) :: ff_dat
     type(coord) :: refmol
+    integer :: prlvl
     io = 0
+    !> gfnff replaced the logical `print` with an integer `printlevel`
+    !> (0=silent, 1=errors, 2=info, 3=verbose) and renamed `iunit` to
+    !> `printunit`. Map the old on/off switch onto the info level.
+    prlvl = 0
+    if (present(pr)) then
+      if (pr) prlvl = 2
+    end if
 #ifdef WITH_GFNFF
     if (allocated(ff_dat%refgeo)) then
       !> initialize GFN-FF from a separate reference structure
       call refmol%open(ff_dat%refgeo)
       call gfnff_initialize(refmol%nat,refmol%at,refmol%xyz,ff_dat, &
-      & ichrg=chrg,print=pr,iostat=io,iunit=iunit)
+      & ichrg=chrg,printlevel=prlvl,iostat=io,printunit=iunit)
       call refmol%deallocate()
     else
       !> initialize parametrization and topology of GFN-FF
       call gfnff_initialize(mol%nat,mol%at,mol%xyz,ff_dat, &
-      & ichrg=chrg,print=pr,iostat=io,iunit=iunit)
+      & ichrg=chrg,printlevel=prlvl,iostat=io,printunit=iunit)
     end if
 
 #else /* WITH_GFNFF */
