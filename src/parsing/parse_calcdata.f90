@@ -344,6 +344,19 @@ contains !> MODULE PROCEDURES START HERE
       job%solvmodel = kv%key
       job%solvent = kv%value_c
 
+    case ('draco')
+      !> DRACO charge-dependent cavity radii, forwarded to the xtb binary.
+      !> Accepts a switch (draco = true) or a parameter set (draco = "gsolv").
+      if (kv%id == valuetypes%bool) then
+        if (kv%value_b) then
+          job%draco = ''
+        else if (allocated(job%draco)) then
+          deallocate (job%draco)
+        end if
+      else
+        job%draco = kv%value_c
+      end if
+
     case ('refine','refinement')
       select case (kv%value_c)
       case ('sp','singlepoint')

@@ -174,6 +174,8 @@ subroutine confscript_morehelp(flag)
     write (*,'(5x,''                     for solvent <string>'')')
     write (*,'(5x,''-alpb <string>     : use ALPB implicit solvent'')')
     write (*,'(5x,''                     for solvent <string>'')')
+    write (*,'(5x,''-draco [set]       : charge-dependent (DRACO) cavity'')')
+    write (*,'(5x,''                     radii, optional parameter set'')')
     write (*,'(5x,''-chrg <int>        : set the molecules´ charge'')')
     write (*,'(5x,''-uhf <int>         : set <int>=Nα-Nβ electrons'')')
     write (*,'(5x,''-charges <file>    : copy a existing atomic charges file for'')')
@@ -938,6 +940,13 @@ subroutine crest_dry(env)
         write (*,'(2x,a,a)') 'Implicit solvation (-alpb) : ',trim(env%solvent)
       else
         write (*,'(2x,a,a)') 'Implicit solvation (-gbsa) : ',trim(env%solvent)
+      end if
+      if (allocated(env%draco)) then
+        if (len_trim(env%draco) > 0) then
+          write (*,'(2x,a,a)') 'Cavity radii     (-draco) : DRACO, set ',trim(env%draco)
+        else
+          write (*,'(2x,a)') 'Cavity radii     (-draco) : DRACO'
+        end if
       end if
     end if
     if (env%chrg .ne. 0.0d0) then

@@ -384,6 +384,9 @@ module crest_data
     character(len=512) :: constraints    !> name of the constraint file
     character(len=20)  :: solvent        !> the solvent
     character(len=:),allocatable :: solv !> the entrie gbsa flag including solvent
+    !> DRACO charge-dependent cavity radii (xtb binary route only).
+    !> Allocated means enabled; the string is the parameter set, empty = xtb default.
+    character(len=:),allocatable :: draco
     character(len=20)  :: gfnver         !> GFN version
     character(len=20)  :: gfnver2        !> GFN version (multilevel)
     character(len=20)  :: lmover         !> GFN version for LMO computation in xtb_lmo subroutine

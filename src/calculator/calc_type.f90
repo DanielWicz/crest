@@ -140,6 +140,9 @@ module calc_type
     logical  :: saveint = .false.
     character(len=:),allocatable :: solvmodel
     character(len=:),allocatable :: solvent
+!>--- DRACO charge-dependent cavity radii (xtb binary route only).
+!>--- Allocated means enabled; the string is the parameter set, empty = xtb default.
+    character(len=:),allocatable :: draco
 !>--- Some optional file name storages
     character(len=:),allocatable :: parametrisation
     logical  :: restart = .false.  !> restart option (some potentials can do this)
@@ -914,6 +917,7 @@ contains  !>--- Module routines start here
     if (allocated(self%efile)) deallocate (self%efile)
     if (allocated(self%solvmodel)) deallocate (self%solvmodel)
     if (allocated(self%solvent)) deallocate (self%solvent)
+    if (allocated(self%draco)) deallocate (self%draco)
     if (allocated(self%tblite)) deallocate (self%tblite)
     if (allocated(self%g0calc)) deallocate (self%g0calc)
     if (allocated(self%ff_dat)) deallocate (self%ff_dat)
@@ -1053,6 +1057,9 @@ contains  !>--- Module routines start here
     if(allocated(self%solvmodel).and.allocated(self%solvent))then
       self%shortflag = self%shortflag//'/'//trim(self%solvmodel)
        self%shortflag = self%shortflag//'('//trim(self%solvent)//')'
+      if(allocated(self%draco))then
+        self%shortflag = self%shortflag//'+draco'
+      endif
     endif
   end subroutine calculation_settings_shortflag
 
@@ -1143,6 +1150,14 @@ contains  !>--- Module routines start here
     if (allocated(self%solvent)) then
     write (atmp,*) 'Solvent'
       write (iunit,fmt3) atmp,trim(self%solvent)
+    end if
+    if (allocated(self%draco)) then
+      write (atmp,*) 'Cavity radii'
+      if (len_trim(self%draco) > 0) then
+        write (iunit,fmt3) atmp,'DRACO ('//trim(self%draco)//')'
+      else
+        write (iunit,fmt3) atmp,'DRACO'
+      end if
     end if
 
     !> xTB specific parameters

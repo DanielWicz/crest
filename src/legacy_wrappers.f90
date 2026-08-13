@@ -78,6 +78,8 @@ subroutine env2calc(env,calc,molin)
       cal%solvmodel = 'unknown'
     end if
     cal%solvent = trim(env%solvent)
+    !> DRACO is applied by the xtb binary on top of the solvation model
+    if (allocated(env%draco)) cal%draco = env%draco
   end if
 
   !> do not reset parameters between calculations (opt for speed)
@@ -99,6 +101,7 @@ subroutine env2calc(env,calc,molin)
     if (env%gbsa) then
       cal2%solvmodel = cal%solvmodel
       cal2%solvent = cal%solvent
+      if (allocated(cal%draco)) cal2%draco = cal%draco
     end if
 
     call cal2%autocomplete(2)

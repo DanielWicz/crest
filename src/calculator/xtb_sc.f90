@@ -190,6 +190,16 @@ contains  !>--- Module routines start here
           calc%systemcall = trim(calc%systemcall)//' '//trim(calc%solvent)
         end if
       end select
+      !>--- DRACO charge-dependent cavity radii. Only meaningful together with an
+      !>--- implicit solvation model, so it is appended inside this branch.
+      if (allocated(calc%draco)) then
+        if (index(calc%systemcall,'--draco') .eq. 0) then
+          calc%systemcall = trim(calc%systemcall)//' --draco'
+          if (len_trim(calc%draco) > 0) then
+            calc%systemcall = trim(calc%systemcall)//' '//trim(calc%draco)
+          end if
+        end if
+      end if
     end if
     !>--- don't miss the --grad flag!
     if (index(calc%systemcall,'-grad') .eq. 0) then

@@ -1240,6 +1240,20 @@ subroutine parseflags(env,arg,nra)
         end if
         write (*,'(2x,a,a)') trim(env%solv),' : implicit solvation'
 
+      case ('-draco','--draco')      !> DRACO charge-dependent cavity radii
+        !> Handled by the xtb binary, so it only affects the xtb subprocess
+        !> routes (gfn1/gfn2/gfnff/gxtb), not the tblite/gfnff in-code APIs.
+        env%draco = ''
+        atmp = adjustl(arg(i+1))
+        if (atmp(1:1) .ne. '-'.and.atmp(1:1) .ne. ' ') then
+          env%draco = trim(atmp)
+        end if
+        if (len_trim(env%draco) > 0) then
+          write (*,'(2x,a,a)') '--draco '//trim(env%draco),' : dynamic cavity radii'
+        else
+          write (*,'(2x,a,a)') '--draco',' : dynamic cavity radii'
+        end if
+
       case ('-chrg')                  !> create a .CHRG file
         call readl(arg(i+1),xx,j)
         open (newunit=ich,file='.CHRG')
@@ -2120,6 +2134,22 @@ subroutine parseflags(env,arg,nra)
   if ((env%gfnver .ne. '--gff').and.(env%gbsa)) then
     env%cts%ggrid = .true.
     env%cts%gbsagrid = 'tight'
+  end if
+
+  !>-- DRACO rescales the solvation cavity, so it is only meaningful with an
+  !>-- implicit solvation model. env%solv carries the whole solvation flag into
+  !>-- the legacy xtb system calls, so the switch is appended there.
+  if (allocated(env%draco)) then
+    if (.not.env%gbsa) then
+      write (*,'(2x,a)') '--draco ignored: it needs an implicit solvation model (-alpb/-gbsa)'
+      deallocate (env%draco)
+    else if (index(env%solv,'--draco') .eq. 0) then
+      if (len_trim(env%draco) > 0) then
+        env%solv = trim(env%solv)//' --draco '//trim(env%draco)
+      else
+        env%solv = trim(env%solv)//' --draco'
+      end if
+    end if
   end if
 
   if (env%gfnver == '--gff') then
