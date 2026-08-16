@@ -151,6 +151,119 @@ subroutine env2calc_setup(env)
 end subroutine env2calc_setup
 
 !================================================================================!
+subroutine env_apply_calclevel(env)
+!*********************************************************************************
+!* Re-apply env%gfnver as the METHOD (calculation level) of the already existing
+!* env%calc, in place.
+!*
+!* WHY THIS EXISTS (fail-open guard):
+!*   env%calc is built exactly once, in confparse (env2calc_setup), from the
+!*   env%gfnver that was active at the end of argument parsing. Several runtypes
+!*   -- QCG above all -- switch methods at RUNTIME by re-assigning env%gfnver
+!*   (e.g. env%gfnver = env%ensemble_opt for -enslvl, or env%freqver for
+!*   -freqlvl, see src/qcg/solvtool.f90). That assignment is only seen by the
+!*   legacy (CREST <3.0) routines. On the new calculator route the method
+!*   silently stayed whatever confparse had built, so CREST printed
+!*   "Method for ensemble search: <X>" while actually running <Y>.
+!*   This routine closes that gap. Keep it called next to EVERY runtime
+!*   env%gfnver re-assignment.
+!*
+!* Only the level-defining fields (id/other/binary/description) are replaced.
+!* Charge, spin, solvation, scratch directory, weights and all calcdata-level
+!* state (constraints, wall potentials, optimizer settings) are preserved.
+!*********************************************************************************
+  use crest_parameters
+  use crest_data
+  use crest_calculator
+  implicit none
+  !> INOUT
+  type(systemdata),intent(inout) :: env
+  !> LOCAL
+  integer :: j
+  integer :: s_chrg,s_uhf,s_refine_lvl,s_id
+  real(wp) :: s_weight
+  logical :: s_active,s_rdwbo,s_rddip,s_rdqat,s_rdgrad,s_apiclean
+  character(len=:),allocatable :: s_calcspace,s_solvmodel,s_solvent,s_draco
+  character(len=:),allocatable :: s_other,s_binary
+
+  if (env%legacy) return
+  if (env%calc%ncalculations < 1) return
+  if (len_trim(env%gfnver) < 1) return
+
+  do j = 1,env%calc%ncalculations
+    !>--- save everything that create() would wipe but that is NOT part of
+    !>--- the method definition itself
+    s_chrg = env%calc%calcs(j)%chrg
+    s_uhf = env%calc%calcs(j)%uhf
+    s_refine_lvl = env%calc%calcs(j)%refine_lvl
+    s_weight = env%calc%calcs(j)%weight
+    s_active = env%calc%calcs(j)%active
+    s_rdwbo = env%calc%calcs(j)%rdwbo
+    s_rddip = env%calc%calcs(j)%rddip
+    s_rdqat = env%calc%calcs(j)%rdqat
+    s_rdgrad = env%calc%calcs(j)%rdgrad
+    s_apiclean = env%calc%calcs(j)%apiclean
+    if (allocated(env%calc%calcs(j)%calcspace)) s_calcspace = env%calc%calcs(j)%calcspace
+    if (allocated(env%calc%calcs(j)%solvmodel)) s_solvmodel = env%calc%calcs(j)%solvmodel
+    if (allocated(env%calc%calcs(j)%solvent)) s_solvent = env%calc%calcs(j)%solvent
+    if (allocated(env%calc%calcs(j)%draco)) s_draco = env%calc%calcs(j)%draco
+    !>--- also keep the OLD method definition so we can roll back if the new
+    !>--- level string is not one the modern calculator understands
+    s_id = env%calc%calcs(j)%id
+    if (allocated(env%calc%calcs(j)%other)) s_other = env%calc%calcs(j)%other
+    if (allocated(env%calc%calcs(j)%binary)) s_binary = env%calc%calcs(j)%binary
+
+    !>--- re-create the level. NOTE: create() calls deallocate() first, which
+    !>--- also drops the cached %calcfile/%gradfile/%systemcall -- exactly what
+    !>--- we want, because those bake in the old binary and scratch paths.
+    call env%calc%calcs(j)%create(trim(env%gfnver))
+
+    !>--- ROLLBACK GUARD: create()/set_lvl has no case default, so a level
+    !>--- string it does not know (e.g. the legacy composite flags '--gfn2@gff')
+    !>--- leaves id = jobtype%unknown = 0, i.e. a dead calculator. In that case
+    !>--- restore the previous method rather than break the run.
+    if (env%calc%calcs(j)%id == jobtype%unknown) then
+      env%calc%calcs(j)%id = s_id
+      if (allocated(s_other)) env%calc%calcs(j)%other = s_other
+      if (allocated(s_binary)) env%calc%calcs(j)%binary = s_binary
+      call env%calc%calcs(j)%autocomplete(j)
+      write (stdout,'(/,a,1x,a,1x,a)') '> WARNING: method',trim(env%gfnver), &
+      & 'is not available in the new calculator routines;'
+      write (stdout,'(a)') '>          keeping the previously selected level for this step.'
+    end if
+
+    !>--- restore
+    env%calc%calcs(j)%chrg = s_chrg
+    env%calc%calcs(j)%uhf = s_uhf
+    env%calc%calcs(j)%refine_lvl = s_refine_lvl
+    env%calc%calcs(j)%weight = s_weight
+    env%calc%calcs(j)%active = s_active
+    env%calc%calcs(j)%rdwbo = s_rdwbo
+    env%calc%calcs(j)%rddip = s_rddip
+    env%calc%calcs(j)%rdqat = s_rdqat
+    env%calc%calcs(j)%rdgrad = s_rdgrad
+    env%calc%calcs(j)%apiclean = s_apiclean
+    if (allocated(s_calcspace)) env%calc%calcs(j)%calcspace = s_calcspace
+    if (allocated(s_solvmodel)) env%calc%calcs(j)%solvmodel = s_solvmodel
+    if (allocated(s_solvent)) env%calc%calcs(j)%solvent = s_solvent
+    if (allocated(s_draco)) env%calc%calcs(j)%draco = s_draco
+    !>--- the xtb subprocess route must keep pointing at the user's binary
+    if (env%calc%calcs(j)%id == jobtype%xtbsys) then
+      env%calc%calcs(j)%binary = trim(env%ProgName)
+    end if
+
+    if (allocated(s_calcspace)) deallocate (s_calcspace)
+    if (allocated(s_solvmodel)) deallocate (s_solvmodel)
+    if (allocated(s_solvent)) deallocate (s_solvent)
+    if (allocated(s_draco)) deallocate (s_draco)
+    if (allocated(s_other)) deallocate (s_other)
+    if (allocated(s_binary)) deallocate (s_binary)
+  end do
+
+  return
+end subroutine env_apply_calclevel
+
+!================================================================================!
 subroutine confscript2i(env,tim)
   use iso_fortran_env,only:wp => real64
   use crest_data

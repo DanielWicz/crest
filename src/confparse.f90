@@ -1892,6 +1892,25 @@ subroutine parseflags(env,arg,nra)
         case ('gff','gfnff')
           env%ensemble_opt = '--gff'
           write (*,'(2x, a)') 'Use of GFN-FF for ensemble search requested.'
+        case ('gxtb')
+          !> g-xTB is dispatched via the *bare* level string 'gxtb' (no leading
+          !> dashes): calculation_settings%set_lvl (src/calculator/calc_type.f90)
+          !> matches 'gxtb' exactly and turns it into jobtype%xtbsys with
+          !> other='--gxtb'. Writing '--gxtb' here would NOT match and would
+          !> silently produce a calculator with no job id.
+          env%ensemble_opt = 'gxtb'
+          write (*,'(2x, a)') 'Use of g-xTB for ensemble search requested.'
+        case default
+          !> BUGFIX: this select case used to have no default, so an unknown
+          !> -enslvl argument was silently ignored and env%ensemble_opt kept its
+          !> '--gff' default. That is a fail-open: CREST then ran a *different*
+          !> method than the command line asked for. Never make this branch
+          !> non-fatal again.
+          write (stderr,'(/,a,1x,a,1x,a)') '**ERROR** -enslvl : unknown method', &
+          & "'"//trim(ctmp)//"'"
+          write (stderr,'(a)') '          allowed values are: gfn0, gfn1, gfn2, gff (=gfnff), gxtb'
+          flush (stderr)
+          error stop 1
         end select
 
       case ('-freqlvl')
@@ -1914,6 +1933,18 @@ subroutine parseflags(env,arg,nra)
         case ('gff','gfnff')
           env%freqver = '--gff'
           write (*,'(2x, a)') 'Use of GFN-FF for frequency computation requested.'
+        case ('gxtb')
+          !> bare 'gxtb' on purpose, see the -enslvl case above
+          env%freqver = 'gxtb'
+          write (*,'(2x, a)') 'Use of g-xTB for frequency computation requested.'
+        case default
+          !> BUGFIX: same fail-open as -enslvl -- an unknown value used to be
+          !> silently discarded, leaving env%freqver at its '--gfn2' default.
+          write (stderr,'(/,a,1x,a,1x,a)') '**ERROR** -freqlvl : unknown method', &
+          & "'"//trim(ctmp)//"'"
+          write (stderr,'(a)') '          allowed values are: gfn0, gfn1, gfn2, gff (=gfnff), gxtb'
+          flush (stderr)
+          error stop 1
         end select
 !========================================================================================!
 !-------- PRINCIPAL COMPONENT analysis and CLUSTERING flags
@@ -2234,7 +2265,12 @@ subroutine parseflags(env,arg,nra)
 !>    few runtypes still default to the legacy ones (see the "TODO, set active at
 !>    later version" cases above). The arguments are processed sequentially, so
 !>    this can only be settled once all of them have been read.
-  if (env%legacy.and.any(modernonly == trim(env%gfnver))) then
+!>    QCG swaps env%gfnver for env%ensemble_opt / env%freqver at runtime
+!>    (src/qcg/solvtool.f90), so a modern-only method selected through -enslvl or
+!>    -freqlvl must force the new routines just as -gxtb itself does.
+  if (env%legacy.and. (any(modernonly == trim(env%gfnver)) &
+  &   .or.any(modernonly == trim(env%ensemble_opt))        &
+  &   .or.any(modernonly == trim(env%freqver)))) then
     legacyreq = .false. !> was -legacy requested explicitly?
     do i = 1,nra
       if (any((/character(8)::'-legacy','--legacy'/) == trim(arg(i)))) legacyreq = .true.

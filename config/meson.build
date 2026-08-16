@@ -230,10 +230,15 @@ endif
 # GFN-FF
 if get_option('WITH_GFNFF')
  add_project_arguments('-DWITH_GFNFF', language: 'fortran')
+ # NOTE: the gfnff subproject dropped its 'with_gbsa' meson option in
+ # 8f30a7f (the same overhaul that renamed printlevel/printunit, which
+ # src/ already follows). Passing it here makes `meson setup` abort with
+ # "In subproject gfnff: Unknown options: gfnff:with_gbsa". gfn0 still has
+ # the option, so only the gfnff entry is stripped.
  gfnff_dep = dependency(
    'gfnff',
    fallback: ['gfnff', 'gfnff_dep'],
-   default_options: ['default_library=static','with_gbsa=true'],
+   default_options: ['default_library=static'],
  )
  exe_deps += gfnff_dep
 endif

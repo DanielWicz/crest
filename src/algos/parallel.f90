@@ -136,6 +136,18 @@ subroutine crest_sploop(env,nat,nall,at,xyz,eread)
       calculations(i)%calcs(j)%calcspace = env%calc%calcs(j)%calcspace//trim(atmp)
       if(allocated(calculations(i)%calcs(j)%calcfile)) deallocate(calculations(i)%calcs(j)%calcfile)
       if(allocated(calculations(i)%calcs(j)%systemcall)) deallocate(calculations(i)%calcs(j)%systemcall)
+      !> BUGFIX (parallel scratch aliasing): %gradfile caches the FULL path
+      !> <calcspace>/xtbinp.engrad on first use (see rd_xtb_engrad in
+      !> src/calculator/xtb_sc.f90, and the ORCA/Turbomole equivalents). If the
+      !> parent calculator has already run once - which it always has, e.g. the
+      !> serial pre-optimization - the clone inherits the PARENT's gradfile while
+      !> writing/running in the per-thread directory <calcspace>_<i>. Every
+      !> thread then re-read one stale gradient file: constant E and constant
+      !> forces, so MTDs ran away and every parallel optimization failed
+      !> ("0 of N structures successfully optimized"). It must be dropped here
+      !> together with %calcfile and %systemcall so it is regenerated for the
+      !> new calcspace.
+      if(allocated(calculations(i)%calcs(j)%gradfile)) deallocate(calculations(i)%calcs(j)%gradfile)
       call calculations(i)%calcs(j)%printid(i,j)
     end do
     calculations(i)%pr_energies = .false.
@@ -321,6 +333,18 @@ subroutine crest_oloop(env,nat,nall,at,xyz,eread,dump,customcalc)
       calculations(i)%calcs(j)%calcspace = mycalc%calcs(j)%calcspace//trim(atmp)
       if(allocated(calculations(i)%calcs(j)%calcfile)) deallocate(calculations(i)%calcs(j)%calcfile)
       if(allocated(calculations(i)%calcs(j)%systemcall)) deallocate(calculations(i)%calcs(j)%systemcall)
+      !> BUGFIX (parallel scratch aliasing): %gradfile caches the FULL path
+      !> <calcspace>/xtbinp.engrad on first use (see rd_xtb_engrad in
+      !> src/calculator/xtb_sc.f90, and the ORCA/Turbomole equivalents). If the
+      !> parent calculator has already run once - which it always has, e.g. the
+      !> serial pre-optimization - the clone inherits the PARENT's gradfile while
+      !> writing/running in the per-thread directory <calcspace>_<i>. Every
+      !> thread then re-read one stale gradient file: constant E and constant
+      !> forces, so MTDs ran away and every parallel optimization failed
+      !> ("0 of N structures successfully optimized"). It must be dropped here
+      !> together with %calcfile and %systemcall so it is regenerated for the
+      !> new calcspace.
+      if(allocated(calculations(i)%calcs(j)%gradfile)) deallocate(calculations(i)%calcs(j)%gradfile)
       call calculations(i)%calcs(j)%printid(i,j)
     end do
     calculations(i)%pr_energies = .false.
@@ -577,6 +601,18 @@ subroutine crest_search_multimd(env,mol,mddats,nsim)
       calculations(i)%calcs(j)%calcspace = env%calc%calcs(j)%calcspace//trim(atmp)
       if(allocated(calculations(i)%calcs(j)%calcfile)) deallocate(calculations(i)%calcs(j)%calcfile)
       if(allocated(calculations(i)%calcs(j)%systemcall)) deallocate(calculations(i)%calcs(j)%systemcall)
+      !> BUGFIX (parallel scratch aliasing): %gradfile caches the FULL path
+      !> <calcspace>/xtbinp.engrad on first use (see rd_xtb_engrad in
+      !> src/calculator/xtb_sc.f90, and the ORCA/Turbomole equivalents). If the
+      !> parent calculator has already run once - which it always has, e.g. the
+      !> serial pre-optimization - the clone inherits the PARENT's gradfile while
+      !> writing/running in the per-thread directory <calcspace>_<i>. Every
+      !> thread then re-read one stale gradient file: constant E and constant
+      !> forces, so MTDs ran away and every parallel optimization failed
+      !> ("0 of N structures successfully optimized"). It must be dropped here
+      !> together with %calcfile and %systemcall so it is regenerated for the
+      !> new calcspace.
+      if(allocated(calculations(i)%calcs(j)%gradfile)) deallocate(calculations(i)%calcs(j)%gradfile)
       call calculations(i)%calcs(j)%printid(i,j)
     end do
     calculations(i)%pr_energies = .false.
@@ -881,6 +917,18 @@ subroutine crest_search_multimd2(env,mols,mddats,nsim)
       calculations(i)%calcs(j)%calcspace = env%calc%calcs(j)%calcspace//trim(atmp)
       if(allocated(calculations(i)%calcs(j)%calcfile)) deallocate(calculations(i)%calcs(j)%calcfile)
       if(allocated(calculations(i)%calcs(j)%systemcall)) deallocate(calculations(i)%calcs(j)%systemcall)
+      !> BUGFIX (parallel scratch aliasing): %gradfile caches the FULL path
+      !> <calcspace>/xtbinp.engrad on first use (see rd_xtb_engrad in
+      !> src/calculator/xtb_sc.f90, and the ORCA/Turbomole equivalents). If the
+      !> parent calculator has already run once - which it always has, e.g. the
+      !> serial pre-optimization - the clone inherits the PARENT's gradfile while
+      !> writing/running in the per-thread directory <calcspace>_<i>. Every
+      !> thread then re-read one stale gradient file: constant E and constant
+      !> forces, so MTDs ran away and every parallel optimization failed
+      !> ("0 of N structures successfully optimized"). It must be dropped here
+      !> together with %calcfile and %systemcall so it is regenerated for the
+      !> new calcspace.
+      if(allocated(calculations(i)%calcs(j)%gradfile)) deallocate(calculations(i)%calcs(j)%gradfile)
       call calculations(i)%calcs(j)%printid(i,j)
     end do
     calculations(i)%pr_energies = .false.

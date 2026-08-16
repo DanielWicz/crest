@@ -184,7 +184,14 @@ contains  !> MODULE PROCEDURES START HERE
       write (*,'(5x,"change ΔE",e18.7,1x,"Eh")') 0.0_wp
       write (*,'(3x,"gradient norm :",f14.7,1x,"Eh/a0")',advance='no') gnorm
       write (*,'(2x,"predicted",e18.7)',advance='no') 0.0_wp
-      write (*,'(1x,"("f7.2"%)")')-0.0_wp
+      !> BUGFIX: the commas around f7.2 are MANDATORY. This format used to read
+      !> '(1x,"("f7.2"%)")'. A missing comma between a character-string edit
+      !> descriptor and a data edit descriptor is not standard Fortran; gfortran
+      !> >=15 rejects it at RUNTIME with
+      !>   "Fortran runtime error: Missing comma between descriptors"
+      !> which aborted every printing geometry optimization (crest --opt) at
+      !> CYCLE 0. Do not remove the commas again.
+      write (*,'(1x,"(",f7.2,"%)")')-0.0_wp
     end if
 
 !>======================================================================
@@ -448,12 +455,12 @@ contains  !> MODULE PROCEDURES START HERE
         if (ii > 1) then
           dummy = (depred-echng)/echng*100.0_wp
           if (abs(dummy) < 1000.0_wp) then
-            write (*,'(1x,"("f7.2"%)")') dummy
+            write (*,'(1x,"(",f7.2,"%)")') dummy
           else
             write (*,'(1x,"(*******%)")')
           end if
         else
-          write (*,'(1x,"("f7.2"%)")')-100.0_wp
+          write (*,'(1x,"(",f7.2,"%)")')-100.0_wp
         end if
       end if
 

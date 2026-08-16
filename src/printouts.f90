@@ -322,7 +322,9 @@ subroutine confscript_morehelp(flag)
     write (*,'(5x,''-ncimtd            : NCI-MTD CREST ensemble generation'')')
     write (*,'(5x,''-mtd               : MTD for QCG ensemble generation'')')
     write (*,'(5x,''-md                : normal MD for QCG ensemble search'')')
-    write (*,'(5x,''-enslvl [method]   : define a method for ensemble search. All gfn methods are supported'')')
+    write (*,'(5x,''-enslvl [method]   : define a method for ensemble search.'')')
+    write (*,'(5x,''                     accepted: gfn0, gfn1, gfn2, gff (=gfnff), gxtb'')')
+    write (*,'(5x,''                     any other value is a hard error (no silent fallback)'')')
     write (*,'(5x,''-clustering        : Turn on clustering for the ensemble search (only for qcgmtd and ncimtd'')')
     write (*,'(5x,''-esolv             : reference cluster generation and comp. of solvation energy'')')
     write (*,'(5x,''-gsolv             : reference cluster generation and comp. of solvation free energy'')')
@@ -330,7 +332,9 @@ subroutine confscript_morehelp(flag)
     write (*,'(5x,''                   : default 4'')')
     write (*,'(5x,''-nocff             : switches off the CFF algorithm'')')
     write (*,'(5x,''-freqscal          : defines frequency scale factor. Only for outprint'')')
-    write (*,'(5x,''-freqlvl [method]  : define a method for frequency computation. All gfn versions are supported'')')
+    write (*,'(5x,''-freqlvl [method]  : define a method for frequency computation.'')')
+    write (*,'(5x,''                     accepted: gfn0, gfn1, gfn2, gff (=gfnff), gxtb'')')
+    write (*,'(5x,''                     any other value is a hard error (no silent fallback)'')')
     write (*,*)
 
   case ('msreact')
@@ -1151,7 +1155,15 @@ subroutine pr_eval_3(srange,freqscal,scal,G)
   real(wp),intent(in)       :: G(srange)
   write (*,*)
   write (*,'(2x,"==================================================")')
-  write (*,'(2x,"|  Gsolv with SCALED RRHO contributions: ",f4.2,4x"|")') scal
+  !> BUGFIX: the comma before "|" is MANDATORY. This read `4x"|"`, and a
+  !> missing comma between a data edit descriptor and a character-string edit
+  !> descriptor is not standard Fortran. gfortran >=15 (the conda toolchain
+  !> builds with 16.1) rejects it at RUNTIME with
+  !>   "Fortran runtime error: Missing comma between descriptors"
+  !> which killed every QCG --gsolv run at the very last banner, AFTER all the
+  !> expensive work was done. Same class as the fixes in optimize/ancopt.f90
+  !> and optimize/rfo.f90. Do not remove the comma again.
+  write (*,'(2x,"|  Gsolv with SCALED RRHO contributions: ",f4.2,4x,"|")') scal
   write (*,'(2x,"|  [1 bar gas/ 1 M solution]                     |")')
   write (*,'(2x,"|                                                |")')
   write (*,'(2x,"|  G_solv (incl.RRHO)+dV(T)=",F8.2," kcal/mol    |")') G(freqscal)

@@ -219,6 +219,7 @@ subroutine qcg_setup(env, solu, solv)
    if (env%final_gfn2_opt) then !If GFN2 final opt, solute also GFN2 optimized
       gfnver_tmp = env%gfnver
       env%gfnver = '--gfn2'
+      call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    end if
 
    if ((.not. env%nopreopt) .and. (solu%nat /= 1)) then
@@ -239,6 +240,7 @@ subroutine qcg_setup(env, solu, solv)
 
    if (env%final_gfn2_opt) then !If GFN2 final opt, solute also GFN2 optimized
       env%gfnver = gfnver_tmp
+      call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    end if
 
    call grepval('xtb.out', '| TOTAL ENERGY', e_there, solu%energy)
@@ -685,6 +687,7 @@ subroutine qcg_grow(env, solu, solv, clus, tim)
 !--- Interaction energy
          !gfnver_tmp = env%gfnver
          env%gfnver = env%lmover
+         call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
          gbsa_tmp = env%gbsa
          solv_tmp = env%solv
          env%gbsa = .false.
@@ -707,6 +710,7 @@ subroutine qcg_grow(env, solu, solv, clus, tim)
          end if
       end do
       env%gfnver = gfnver_tmp
+      call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
 
 !--- For output
       if (env%use_xtbiff) then
@@ -782,6 +786,7 @@ subroutine qcg_grow(env, solu, solv, clus, tim)
    if (env%gfnver .ne. '--gfn2' .and. env%final_gfn2_opt) then
       gfnver_tmp = env%gfnver
       env%gfnver = '--gfn2'
+      call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
       write (*, '(2x,''Final gfn2 optimization'')')
       call opt_cluster(env, solu, clus, 'cluster.coord', .false.)
       call rdcoord('xtbopt.coord', clus%nat, clus%at, clus%xyz)
@@ -793,15 +798,20 @@ subroutine qcg_grow(env, solu, solv, clus, tim)
          write (*, '(2x,''Total gfn2-energy of cluster/Eh:'',f20.6)') clus%energy
       end if
       env%gfnver = gfnver_tmp
+      call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    end if
 
    call wrxyz('cluster.xyz', clus%nat, clus%at, clus%xyz*bohr)
 
 !--- One optimization without Wall Potential and with implicit model
    gfnver_tmp = env%gfnver
-   if (env%final_gfn2_opt) env%gfnver = '--gfn2'
+   if (env%final_gfn2_opt) then
+      env%gfnver = '--gfn2'
+      call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
+   end if
    call opt_cluster(env, solu, clus, 'cluster.xyz', .true.)
    env%gfnver = gfnver_tmp
+   call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    call rename('xtbopt.xyz', 'cluster_optimized.xyz')
    call copysub('cluster_optimized.xyz', resultspath)
 
@@ -989,6 +999,7 @@ subroutine qcg_ensemble(env, solu, solv, clus, ens, tim, fname_results)
    write (*, *) '  Method for ensemble search:', env%ensemble_opt
 !  if (env%ens_const) write(*,*) '  Solute fixed during ensemble generation'
    env%gfnver = env%ensemble_opt  !Setting method for ensemble search
+   call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
 
    !----------------------------------------------------------------
    ! Case selection of normal Crest, MD or MTD
@@ -1243,6 +1254,7 @@ subroutine qcg_ensemble(env, solu, solv, clus, ens, tim, fname_results)
 !      if (env%gfnver .ne. '--gfn2') then
       write (*, '(2x,a)') 'GFN2-xTB optimization'
       env%gfnver = '--gfn2'
+      call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
       call rmrf('OPTIM')
       call multilevel_opt(env, 99)
    end if
@@ -1322,6 +1334,7 @@ subroutine qcg_ensemble(env, solu, solv, clus, ens, tim, fname_results)
    end if
 
    env%gfnver = gfnver_tmp
+   call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    call ens%write('full_ensemble.xyz')
 
 !--- crest_best structure
@@ -1480,6 +1493,7 @@ subroutine qcg_ensemble(env, solu, solv, clus, ens, tim, fname_results)
    write (*, '(2x,''Population in file <population.dat>'')')
 
    env%gfnver = gfnver_tmp
+   call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    env%optlev = optlev_tmp
    if (env%ensemble_opt .eq. '--gff') then
       env%cts%cbonds_md = cbonds_tmp
@@ -1582,8 +1596,10 @@ subroutine qcg_cff(env, solu, solv, clus, ens, solv_ens, tim)
    gfnver_tmp = env%gfnver
    if (env%final_gfn2_opt) then
       env%gfnver = '--gfn2'
+      call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    else
       env%gfnver = env%ensemble_opt !CFF always with ensemble method
+      call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    end if
    nothing_added = .false.
 
@@ -1951,6 +1967,7 @@ subroutine qcg_cff(env, solu, solv, clus, ens, solv_ens, tim)
    write (*, '(2x,''Population in file <population.dat>'')')
 
    env%gfnver = gfnver_tmp
+   call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    env%optlev = optlev_tmp
 
    deallocate (e_empty)
@@ -1999,6 +2016,7 @@ subroutine qcg_freq(env, tim, solu, solv, solu_ens, solv_ens)
    env%optlev = 1.0d0    !Increaseing percision for ensemble search to minimze scattering
    gfnver_tmp = env%gfnver
    env%gfnver = env%freqver  !Setting method
+   call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
 
 !--- Folder management
    call getcwd(thispath)
@@ -2211,6 +2229,7 @@ subroutine qcg_freq(env, tim, solu, solv, solu_ens, solv_ens)
    call chdir(thispath)
 
    env%gfnver = gfnver_tmp
+   call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    env%optlev = optlev_tmp
 
    call tim%stop(9)

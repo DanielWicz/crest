@@ -88,6 +88,7 @@ subroutine newcregen(env,quickset,infile)
   integer,allocatable :: gref(:),group(:)
   integer :: ng
   integer,allocatable :: degen(:,:)
+  integer :: idegen  !> loop counter for the trivial-grouping fallback below
 
 !>--- float data
   real(wp) :: ewin,rthr,bthr,pthr,ethr,athr
@@ -250,6 +251,26 @@ subroutine newcregen(env,quickset,infile)
 !=====================================================================!
 !>  E N S E M B L E   O U T P U T
 !=====================================================================!
+
+!>--- BUGFIX (SIGSEGV): "degen" and "ng" are ONLY produced by the sortRMSD
+!>--- branch above. The energy-sorting-only setting (simpleset 6/7 or
+!>--- env%esort) switches sortRMSD off, yet still requests conffile for QCG
+!>--- ("if ((env%crestver .eq. crest_solv).and.(.not.env%QCG))" in
+!>--- cregen_director). cregen_conffile then received an UNALLOCATED degen and
+!>--- an UNDEFINED ng, declared there as "integer :: degen(3,ng)", and crashed
+!>--- on "c0(:,:) = xyz(:,:,degen(2,i))". Without RMSD grouping there are no
+!>--- conformer groups, so the only defined answer is the trivial grouping:
+!>---   ng = nall,  degen(1,i)=1 (one member),  degen(2,i)=degen(3,i)=i
+!>--- i.e. every (already energy-sorted) structure is its own conformer.
+  if (.not.allocated(degen)) then
+    ng = nall
+    allocate (degen(3,ng))
+    do idegen = 1,ng
+      degen(1,idegen) = 1
+      degen(2,idegen) = idegen
+      degen(3,idegen) = idegen
+    end do
+  end if
 
 !>--- align all structures to the first structure using the RMSD
   call cregen_rmsdalign(nat,nall,at,xyz)
