@@ -40,7 +40,7 @@ subroutine xtb_sp_qcg(env, fname)
 
 !---- jobcall
    write (jobcall, '(a,1x,a,1x,a,'' --sp '',a,1x,a)') &
-   &     trim(env%ProgName), trim(fname), trim(env%gfnver), trim(env%solv), trim(pipe)
+   &     trim(env%ProgName), trim(fname), xtb_level_flag(env%gfnver), trim(env%solv), trim(pipe)
 
    call command(trim(jobcall), io)
 !---- cleanup
@@ -84,10 +84,10 @@ subroutine xtb_opt_qcg(env, zmol, constrain)
      call write_constraint(env, fname, 'xcontrol')
      call wrc0('coord.ref', zmol%nat, zmol%at, zmol%xyz) !write coord for xtbopt routine
      write (jobcall, '(a,1x,a,1x,a,'' --opt --input xcontrol '',a,1x,a)') &
-     &     trim(env%ProgName), trim(fname), trim(env%gfnver), trim(env%solv), trim(pipe)
+     &     trim(env%ProgName), trim(fname), xtb_level_flag(env%gfnver), trim(env%solv), trim(pipe)
    else
      write (jobcall, '(a,1x,a,1x,a,'' --opt '',a,1x,a)') &
-     &     trim(env%ProgName), trim(fname), trim(env%gfnver), trim(env%solv), trim(pipe)
+     &     trim(env%ProgName), trim(fname), xtb_level_flag(env%gfnver), trim(env%solv), trim(pipe)
    end if
 
    call command(trim(jobcall), io)
@@ -124,7 +124,7 @@ subroutine xtb_lmo(env, fname)!,chrg)
 
 !---- jobcall, special gbsa treatment not needed, as the entire flag is included in env%solv
    write (jobcall, '(a,1x,a,1x,a,'' --sp --lmo '',a)') &
-   &     trim(env%ProgName), trim(fname), trim(env%lmover), trim(pipe)
+   &     trim(env%ProgName), trim(fname), xtb_level_flag(env%lmover), trim(pipe)
    call command(trim(jobcall), exitstat=io)
    
    if(io /= 0)then
@@ -234,7 +234,7 @@ subroutine xtb_dock(env, fnameA, fnameB, solu, clus)
 !--- Jobcall docking
    write (jobcall, '(a,1x,''dock'',1x,a,1x,a,1x,a,1x,f4.2,1x,''--nfrag1'',1x,i0,1x,a,1x, &
            & ''--input xcontrol > xtb_dock.out'',a)') &
-           &     trim(env%ProgName), trim(fnameA), trim(fnameB), trim(env%gfnver),&
+           &     trim(env%ProgName), trim(fnameA), trim(fnameB), xtb_level_flag(env%gfnver),&
            &     env%optlev, solu%nat, trim(env%docking_qcg_flag), trim(pipe)
    call command(trim(jobcall))
 
@@ -283,7 +283,7 @@ subroutine opt_cluster(env, solu, clus, fname, without_pot)
 
 !--- Jobcall optimization
    jobcall = trim(env%ProgName)//' '//trim(fname)//' --opt '//optlevflag(env%optlev) 
-   jobcall = trim(jobcall)//' '//trim(env%gfnver)
+   jobcall = trim(jobcall)//' '//xtb_level_flag(env%gfnver)
    if(without_pot)then
      jobcall = trim(jobcall)//' '//trim(env%solv)
    endif
@@ -297,7 +297,7 @@ subroutine opt_cluster(env, solu, clus, fname, without_pot)
 
 !--- Jobcall SP for gbsa model
    if (.not. without_pot) then
-      jobcall =  trim(env%ProgName)//' xtbopt.coord --sp '//trim(env%gfnver)
+      jobcall =  trim(env%ProgName)//' xtbopt.coord --sp '//xtb_level_flag(env%gfnver)
       jobcall = trim(jobcall)//' '//trim(env%solv)
       jobcall = trim(jobcall)//' > xtb_sp.out 2>/dev/null' 
    end if
@@ -343,7 +343,7 @@ subroutine ensemble_lmo(env, fname, self, NTMP, TMPdir, conv)
    !create the system call (it is the same for every optimization)
 
    write (jobcall, '(a,1x,a,1x,a,'' --sp --lmo --chrg '',f4.1,1x,a,'' >xtb_lmo.out'')') &
-   &     trim(env%ProgName), trim(fname), trim(env%lmover), self%chrg, trim(pipe)
+   &     trim(env%ProgName), trim(fname), xtb_level_flag(env%lmover), self%chrg, trim(pipe)
    k = 0 !counting the finished jobs
 !___________________________________________________________________________________
 
@@ -492,7 +492,7 @@ subroutine ensemble_dock(env, outer_ell_abc, nfrag1, frag1_file, frag2_file, n_s
    write (jobcall, '(a,1x,''dock'',1x,a,1x,a,1x,a,1x,f4.2,1x,''--nfrag1'',1x,i0,1x,&
            & ''--input xcontrol --fast > xtb_dock.out '',a)') &
            & trim(env%ProgName), trim(frag1_file), trim(frag2_file),&
-           & trim(env%gfnver), env%optlev, nfrag1, trim(pipe)
+           & xtb_level_flag(env%gfnver), env%optlev, nfrag1, trim(pipe)
 
    flag = '$'
    do i = 1, NTMP
@@ -603,7 +603,7 @@ subroutine cff_opt(postopt, env, fname, n12, NTMP, TMPdir, conv, nothing_added)
 
 !--- Jobcall
    write (jobcall, '(a,1x,a,1x,a,'' --input xcontrol --opt '',i0,1x,a,'' >xtb.out'')') &
-   &    trim(env%ProgName), trim(fname), trim(env%gfnver), nint(env%optlev), trim(pipe)
+   &    trim(env%ProgName), trim(fname), xtb_level_flag(env%gfnver), nint(env%optlev), trim(pipe)
 
    if (NTMP .lt. 1) then
       write (*, '(2x,"No structures to be optimized")')
@@ -646,7 +646,7 @@ subroutine cff_opt(postopt, env, fname, n12, NTMP, TMPdir, conv, nothing_added)
 
    !create the system call for sp (needed for gbsa model)
    write (jobcall, '(a,1x,a,1x,a,'' --sp '',a,1x,a,'' >xtb_sp.out'')') &
-   &    trim(env%ProgName), 'xtbopt.coord', trim(env%gfnver), trim(env%solv), trim(pipe)
+   &    trim(env%ProgName), 'xtbopt.coord', xtb_level_flag(env%gfnver), trim(env%solv), trim(pipe)
 
    if (NTMP .lt. 1) then
       write (*, '(2x,"Nothing to do")')
@@ -736,7 +736,7 @@ subroutine ens_sp(env, fname, NTMP, TMPdir)
 
 !--- Jobcall
    write (jobcall, '(a,1x,a,1x,a,'' --sp '',a,1x,a,'' > xtb_sp.out'')') &
-   &    trim(env%ProgName), trim(fname), trim(env%gfnver), trim(env%solv), trim(pipe)
+   &    trim(env%ProgName), trim(fname), xtb_level_flag(env%gfnver), trim(env%solv), trim(pipe)
 
    k = 0 !counting the finished jobs
    call printprogbar(0.0_wp)
@@ -823,10 +823,10 @@ subroutine ens_freq(env, fname, NTMP, TMPdir, opt)
 !--- Jobcall
    if (.not. opt) then
       write (jobcall, '(a,1x,a,1x,a,'' --hess '',a,'' >xtb_freq.out'')') &
-       &    trim(env%ProgName), trim(fname), trim(env%gfnver), trim(pipe)
+       &    trim(env%ProgName), trim(fname), xtb_level_flag(env%gfnver), trim(pipe)
    else
       write (jobcall, '(a,1x,a,1x,a,'' --ohess '',a,'' >xtb_freq.out'')') &
-      &    trim(env%ProgName), trim(fname), trim(env%gfnver), trim(pipe)
+      &    trim(env%ProgName), trim(fname), xtb_level_flag(env%gfnver), trim(pipe)
    end if
 
 !___________________________________________________________________________________

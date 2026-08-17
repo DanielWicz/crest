@@ -350,7 +350,7 @@ subroutine thermo_wrap_legacy(env,pr,nat,at,xyz,dirname, &
   else
     jobcall = trim(jobcall)//" "//trim(xname)//' --ohess'
   end if
-  jobcall = trim(jobcall)//" "//trim(env%gfnver)
+  jobcall = trim(jobcall)//" "//xtb_level_flag(env%gfnver)
   jobcall = trim(jobcall)//" "//trim(env%solv)
   if (env%chrg /= 0) then
     jobcall = trim(jobcall)//" --chrg "//to_str(env%chrg)

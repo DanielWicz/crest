@@ -403,11 +403,11 @@ subroutine msreact_jobber(env,ndirs,base,constr,niceprint)
   write (uhf,'(i0)') env%uhf
 
   if (constr) then
-    write (jobcall,'(a)') 'xtb struc.xyz  --opt loose --input .xc1 '//trim(env%gfnver)//' --chrg '//trim(chrg)//' --uhf '//trim(uhf)//' > split.out 2>/dev/null'
-    write (jobcall2,'(a)') 'xtb xtbopt.xyz --opt crude --input .xc2 '//trim(env%gfnver)//' --chrg '//trim(chrg)//' --uhf '//trim(uhf)//' > xtb.out 2>/dev/null'
+    write (jobcall,'(a)') 'xtb struc.xyz  --opt loose --input .xc1 '//xtb_level_flag(env%gfnver)//' --chrg '//trim(chrg)//' --uhf '//trim(uhf)//' > split.out 2>/dev/null'
+    write (jobcall2,'(a)') 'xtb xtbopt.xyz --opt crude --input .xc2 '//xtb_level_flag(env%gfnver)//' --chrg '//trim(chrg)//' --uhf '//trim(uhf)//' > xtb.out 2>/dev/null'
     jobcall = trim(jobcall)//' ; '//trim(jobcall2)
   else
-    write (jobcall,'(a)') 'xtb struc.xyz --opt crude --input .xc1 '//trim(env%gfnver)//' --chrg '//trim(chrg)//' --uhf '//trim(uhf)//' > xtb.out 2>/dev/null'
+    write (jobcall,'(a)') 'xtb struc.xyz --opt crude --input .xc1 '//xtb_level_flag(env%gfnver)//' --chrg '//trim(chrg)//' --uhf '//trim(uhf)//' > xtb.out 2>/dev/null'
   end if
 
   !-- directories must be numbered consecutively

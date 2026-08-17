@@ -361,7 +361,7 @@ subroutine pka_miniopt(env,fname)
   jobcall = ''
   jobcall = trim(env%ProgName)//' '//trim(fname)
   jobcall = trim(jobcall)//' --ceasefiles --opt vtight'
-  jobcall = trim(jobcall)//' '//trim(env%gfnver)
+  jobcall = trim(jobcall)//' '//xtb_level_flag(env%gfnver)
   jobcall = trim(jobcall)//' '//trim(env%solv)
   jobcall = trim(jobcall)//' > xtb.out 2>/dev/null'
   call command(trim(jobcall), io)

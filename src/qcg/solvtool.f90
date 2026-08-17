@@ -216,9 +216,12 @@ subroutine qcg_setup(env, solu, solv)
    call env%wrtCHRG('') !Write three lines in QCG mode, but xtb anyway only reads first one
 
 !---- Geometry preoptimization solute
-   if (env%final_gfn2_opt) then !If GFN2 final opt, solute also GFN2 optimized
+   !> The GAS-PHASE MONOMER term of dGsolv is produced here (solu%energy, grepped
+   !> ~30 lines below). It must be computed at the same level as the two cluster
+   !> terms, hence env%score_lvl and not a hardcoded '--gfn2'.
+   if (env%final_gfn2_opt) then !If a final scoring pass runs, the solute uses its level too
       gfnver_tmp = env%gfnver
-      env%gfnver = '--gfn2'
+      env%gfnver = env%score_lvl
       call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    end if
 
@@ -783,11 +786,11 @@ subroutine qcg_grow(env, solu, solv, clus, tim)
 
    if (env%nsolv .eq. 0) env%nsolv = iter !if no env%solv was given
 
-   if (env%gfnver .ne. '--gfn2' .and. env%final_gfn2_opt) then
+   if (trim(env%gfnver) .ne. trim(env%score_lvl) .and. env%final_gfn2_opt) then
       gfnver_tmp = env%gfnver
-      env%gfnver = '--gfn2'
+      env%gfnver = env%score_lvl
       call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
-      write (*, '(2x,''Final gfn2 optimization'')')
+      write (*, '(2x,''Final '',a,'' optimization'')') trim(env%score_lvl)
       call opt_cluster(env, solu, clus, 'cluster.coord', .false.)
       call rdcoord('xtbopt.coord', clus%nat, clus%at, clus%xyz)
       call wrc0('cluster.coord', clus%nat, clus%at, clus%xyz)
@@ -795,7 +798,8 @@ subroutine qcg_grow(env, solu, solv, clus, tim)
       if (.not. e_there) then
          write (*, '(1x,a)') 'Total Energy of cluster not found.'
       else
-         write (*, '(2x,''Total gfn2-energy of cluster/Eh:'',f20.6)') clus%energy
+         write (*, '(2x,''Total '',a,''-energy of cluster/Eh:'',f20.6)') &
+         & trim(env%score_lvl), clus%energy
       end if
       env%gfnver = gfnver_tmp
       call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
@@ -806,7 +810,7 @@ subroutine qcg_grow(env, solu, solv, clus, tim)
 !--- One optimization without Wall Potential and with implicit model
    gfnver_tmp = env%gfnver
    if (env%final_gfn2_opt) then
-      env%gfnver = '--gfn2'
+      env%gfnver = env%score_lvl
       call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    end if
    call opt_cluster(env, solu, clus, 'cluster.xyz', .true.)
@@ -1135,11 +1139,11 @@ subroutine qcg_ensemble(env, solu, solv, clus, ens, tim, fname_results)
 
 !--- Writing jobcall
       write (jobcall, '(a,1x,a,1x,a,'' --md --input xcontrol '',a,1x,a,a)') &
-            &     trim(env%ProgName), trim(fname), trim(env%gfnver), trim(env%solv), pipe
+            &     trim(env%ProgName), trim(fname), xtb_level_flag(env%gfnver), trim(env%solv), pipe
 !--- slightly different jobcall for QMDFF usage
       if (env%useqmdff) then
          write (jobcall, '(a,1x,a,1x,a,'' --md --input xcontrol --qmdff'',a,1x,a,a)') &
-            &     trim(env%ProgName), trim(fname), trim(env%gfnver), trim(env%solv), pipe
+            &     trim(env%ProgName), trim(fname), xtb_level_flag(env%gfnver), trim(env%solv), pipe
       end if
 
 !--- MD
@@ -1248,12 +1252,12 @@ subroutine qcg_ensemble(env, solu, solv, clus, ens, tim, fname_results)
 
    env%QCG = .true.
 
-!--- Optimization with gfn2 if necessary
+!--- Final scoring optimization (this level also produces ens%er via ens_sp below,
+!--- i.e. the SOLUTE-CLUSTER term of dGsolv)
       if (env%final_gfn2_opt) then
       gfnver_tmp = env%gfnver
-!      if (env%gfnver .ne. '--gfn2') then
-      write (*, '(2x,a)') 'GFN2-xTB optimization'
-      env%gfnver = '--gfn2'
+      write (*, '(2x,a,1x,a)') trim(env%score_lvl),'scoring optimization'
+      env%gfnver = env%score_lvl
       call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
       call rmrf('OPTIM')
       call multilevel_opt(env, 99)
@@ -1593,9 +1597,11 @@ subroutine qcg_cff(env, solu, solv, clus, ens, solv_ens, tim)
 !--- Setting defaults (same as ensemble optimization to have comparable structures)
    optlev_tmp = env%optlev
    env%optlev = 1.0d0    !Increaseing percision for ensemble search to minimze scattering
+   !> CFF builds the pure-solvent reference cluster, i.e. the SOLVENT-CLUSTER term
+   !> of dGsolv. Same level as the solute cluster or the difference is meaningless.
    gfnver_tmp = env%gfnver
    if (env%final_gfn2_opt) then
-      env%gfnver = '--gfn2'
+      env%gfnver = env%score_lvl
       call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    else
       env%gfnver = env%ensemble_opt !CFF always with ensemble method
@@ -2422,6 +2428,24 @@ subroutine write_qcg_setup(env)
    write (*, '(2x,''xtb opt level          : '',a)') trim(optlevflag(env%optlev))
    write (*, '(2x,''System temperature [K] : '',F5.1)') env%tboltz
    write (*, '(2x,''RRHO scaling factor    : '',F4.2)') env%freq_scal
+
+   !>--- Levels of theory, named per dGsolv term.
+   !>    Printed because the SCORING level used to be invisible: it silently
+   !>    followed -enslvl (default '--gff', i.e. GFN-FF), so a run could report a
+   !>    "g-xTB" solvation free energy whose electronic energies were GFN-FF.
+   write (*, *)
+   write (*, '(2x,''levels of theory'')')
+   write (*, '(2x,''growth / gas monomer   : '',a)') trim(env%gfnver)
+   write (*, '(2x,''ensemble sampling+opt  : '',a)') trim(env%ensemble_opt)
+   if (env%final_gfn2_opt) then
+      write (*, '(2x,''FINAL SCORING (all 3 dGsolv terms) : '',a)') trim(env%score_lvl)
+   else
+      write (*, '(2x,''FINAL SCORING          : '',a,'' (clusters), '',a,'' (gas monomer)'')') &
+      & trim(env%ensemble_opt), trim(env%gfnver)
+   end if
+   if (env%qcg_runtype .ge. 3) then
+      write (*, '(2x,''RRHO / frequencies     : '',a)') trim(env%freqver)
+   end if
    write (*, *)
    if (env%use_xtbiff) write (*, '(2x,''Use of xTB-IFF standalone requested'')')
 

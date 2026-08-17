@@ -61,12 +61,12 @@ subroutine trialMD_legacy(env)
   pipe = ' > xtb.out 2>/dev/null'
 
   write (jobcall,'(a,1x,a,1x,a,'' --md '',a,a)') &
-  &     trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),pipe
+  &     trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),pipe
 
   !--- slightly different jobcall for qmdff usage, and check for solvent file
   if (env%useqmdff) then
     write (jobcall,'(a,1x,a,1x,a,'' --md --qmdff '',a,a)') &
-    &     trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),pipe
+    &     trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),pipe
 
     inquire (file='solvent',exist=ex)
     if (.not.ex) then

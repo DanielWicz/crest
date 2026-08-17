@@ -256,7 +256,7 @@ contains  !> MODULE PROCEDURES START HERE
     jobcall = trim(jobcall)//' '//trim(fname)
     write(atmp,'(f10.4)') etemp
     jobcall = trim(jobcall)//' --sp --etemp '//trim(atmp)
-    jobcall = trim(jobcall)//' '//trim(env%gfnver)
+    jobcall = trim(jobcall)//' '//xtb_level_flag(env%gfnver)
     write(chrg,'(i0)') env%chrg
     write(uhf,'(i0)') env%uhf
     jobcall = trim(jobcall)//' --chrg '//trim(chrg)//' --uhf '//trim(uhf)
@@ -344,7 +344,7 @@ contains  !> MODULE PROCEDURES START HERE
         write(atmp,'(f10.4)') etemp
         !always perform at charge 0
         jobcall = trim(jobcall)//' --sp --chrg '//trim(chrg)//' --uhf '//trim(uhf_wbo)//' --etemp '//trim(atmp)
-        jobcall = trim(jobcall)//' '//trim(env%gfnver)//trim(pipe)
+        jobcall = trim(jobcall)//' '//xtb_level_flag(env%gfnver)//trim(pipe)
     
         call execute_command_line(trim(jobcall),exitstat=io)
     

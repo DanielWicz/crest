@@ -208,10 +208,10 @@ subroutine ab_singlepoint(fname,env,bhess)
      integer :: io
      if(.not.bhess)then
      write(jobcall,'(a,1x,a,1x,a,'' --wbo '',a,1x,a,a)') &
-     &     trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),trim(pipe)
+     &     trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
      else
      write(jobcall,'(a,1x,a,1x,a,'' --wbo --bhess '',a,1x,a,a)')  &
-     &     trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),trim(pipe)
+     &     trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
      endif
      call command(trim(jobcall), io)
      return

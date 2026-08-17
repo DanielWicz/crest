@@ -467,7 +467,7 @@ subroutine protens(ens,env,prot,tim)
 !--- creating the job
   jobcall = trim(env%ProgName)
   jobcall = trim(jobcall)//' '//'coord'
-  jobcall = trim(jobcall)//' '//trim(env%gfnver)
+  jobcall = trim(jobcall)//' '//xtb_level_flag(env%gfnver)
   jobcall = trim(jobcall)//' --sp --lmo '//trim(env%solv)
   jobcall = trim(jobcall)//' > xtb.out 2>/dev/null'
   

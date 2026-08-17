@@ -249,23 +249,23 @@ subroutine propcalc(iname,imode,env,tim)
   case (1)
     call smallhead('Hessian calculations for all conformers')
     write (jobcall,'(a,1x,a,1x,a,'' --hess '',a,1x,a,'' >xtb.out'')') &
-    &    trim(env%ProgName),trim(xname),trim(env%gfnver),trim(env%solv),trim(pipe)
+    &    trim(env%ProgName),trim(xname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
   case (10)
     call smallhead('Optimization + Hessian calculations for all conformers')
     write (jobcall,'(a,1x,a,1x,a,'' --ohess '',a,1x,a,'' >xtb.out'')') &
-    &    trim(env%ProgName),trim(xname),trim(env%gfnver),trim(env%solv),trim(pipe)
+    &    trim(env%ProgName),trim(xname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
   case (13)
     call smallhead('Free energy calculation in solvation')
     write (jobcall,'(a,1x,a,1x,a,'' --sp '',a,'' >sp.out'')') &
-    &    trim(env%ProgName),trim(xname),trim(env%gfnver),trim(pipe) !E_gas(Solv_geom) singlepoint
+    &    trim(env%ProgName),trim(xname),xtb_level_flag(env%gfnver),trim(pipe) !E_gas(Solv_geom) singlepoint
     largejobcall = trim(jobcall)//' ; '
     write (jobcall,'(a,1x,a,1x,a,'' --ohess '',a,1x,a,'' >xtb.out'')') &
-    &    trim(env%ProgName),trim(xname),trim(env%gfnver),trim(env%solv),trim(pipe)
+    &    trim(env%ProgName),trim(xname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
     jobcall = largejobcall//trim(jobcall)
   case (2)
     call smallhead('IR calculation for populated conformers')
     write (jobcall,'(a,1x,a,1x,a,'' --ohess '',a,1x,a,'' >xtb.out'')') &
-    &    trim(env%ProgName),trim(xname),trim(env%gfnver),trim(env%solv),trim(pipe)
+    &    trim(env%ProgName),trim(xname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
 !       case( 3:6,7,8,100 ) ! unspecific case DFT
 !         call smallhead('DFT calculation using xtb as driver')
 !         if( any((/3,4/)==P) )then
@@ -280,14 +280,14 @@ subroutine propcalc(iname,imode,env,tim)
   case (20)
     call smallhead('Reoptimization for all conformers')
     write (jobcall,'(a,1x,a,1x,a,'' --opt vtight '',a,1x,a,'' >xtb.out'')') &
-    &    trim(env%ProgName),trim(xname),trim(env%gfnver),trim(env%solv),trim(pipe)
+    &    trim(env%ProgName),trim(xname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
   case (50:59)
     call smallhead('Reoptimization of entire CRE')
     write (jobcall,'(a,1x,a,1x,a,'' --opt vtight '',a,1x,a,'' >xtb.out'')') &
-    &    trim(env%ProgName),trim(xname),trim(env%gfnver2),trim(env%solv),trim(pipe)
+    &    trim(env%ProgName),trim(xname),xtb_level_flag(env%gfnver2),trim(env%solv),trim(pipe)
   case default
     write (jobcall,'(a,1x,a,1x,a,'' --sp '',a,1x,a,'' >xtb.out'')') &
-    &    trim(env%ProgName),trim(xname),trim(env%gfnver),trim(env%solv),trim(pipe)
+    &    trim(env%ProgName),trim(xname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
   end select
   call chdir(optpath)
 

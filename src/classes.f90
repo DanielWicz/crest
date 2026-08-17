@@ -35,6 +35,7 @@ module crest_data
   public :: protobj
   public :: constra
   public :: optlevflag,optlevnum,optlevmap_alt
+  public :: xtb_level_flag   !> level string -> xtb command-line flag (legacy jobcalls)
   public :: optlev_to_multilev
 
   !> basename for the CRE files
@@ -466,6 +467,14 @@ module crest_data
     integer, allocatable :: directed_number(:) !Numbers of solvents added per defined atom
     character(len=20) :: ensemble_opt         !> Method for ensemble optimization in qcg mode
     character(len=20) :: freqver              !> Method for frequency computation in qcg mode
+    !> Level for the FINAL optimisation + single point that produce the electronic
+    !> energies entering dGsolv. Empty string = not requested, in which case the
+    !> old behaviour applies (clusters at ensemble_opt, gas monomer at gfnver).
+    !> QCG's dGsolv is a DIFFERENCE of total energies,
+    !>     dGsolv = <G>_solute_cluster - <G>_solvent_cluster - G_monomer - w_V ,
+    !> so all three terms must come from the SAME Hamiltonian; score_lvl is the
+    !> single knob that guarantees that (see the gate in qcg_check_score_levels).
+    character(len=20) :: score_lvl = ''       !> Method for the final scoring opt/SP in qcg mode
     real(wp)          :: freq_scal            !> Frequency scaling factor
     character(len=:),allocatable :: solu_file,solv_file !> solute  and solvent input file
     character(len=5) :: docking_qcg_flag = '--qcg'
@@ -1025,6 +1034,47 @@ contains  !> MODULE PROCEDURES START HERE
     write (*,*) self%temps
     return
   end subroutine thermo_read_temps
+
+!========================================================================================!
+
+!> Map an internal CREST level string onto the command-line flag that the xtb
+!> BINARY expects.
+!>
+!> CREST carries two dispatch mechanisms for the level of theory:
+!>   (a) the new calculator API, calculation_settings%set_lvl (calc_type.f90),
+!>       which matches the BARE string 'gxtb' and turns it into jobtype%xtbsys
+!>       with other='--gxtb';
+!>   (b) the legacy jobcall paths (QCG, thermocalc, ...), which splice the level
+!>       string straight into an `xtb <file> <level> ...` command line.
+!> Those two want DIFFERENT spellings for g-xTB, and only (a) was fixed when
+!> -enslvl/-freqlvl gxtb were introduced.
+!>
+!> *** BUG THIS PREVENTS (measured 2026-08-17) ***
+!> Splicing the bare token gives `xtb h2o.xyz gxtb --sp`, which xtb accepts with
+!> exit code 0 and "normal termination" while SILENTLY DISCARDING the token and
+!> running its own default Hamiltonian:
+!>       args=''       E = -76.449734862811 Eh   (binary default)
+!>       args='gxtb'   E = -76.449734862811 Eh   (token ignored)
+!>       args='--gxtb' E = -76.449734862811 Eh
+!>       args='--gfn2' E =  -5.070369443818 Eh
+!> On a build whose default is g-xTB this looks correct by luck; on a stock xtb
+!> the very same command line silently produces GFN2 numbers that are then
+!> Boltzmann-averaged into a "g-xTB" solvation free energy.
+!> NEVER splice a raw level string into a jobcall again -- route it through here.
+  function xtb_level_flag(lvl) result(flag)
+    implicit none
+    character(len=*),intent(in) :: lvl
+    character(len=:),allocatable :: flag
+    select case (trim(lvl))
+    case ('gxtb')
+      flag = '--gxtb'
+    case ('gxtb_dev')
+      flag = '--gxtb_dev'
+    case default
+      !> every GFNn level is already stored with its leading dashes
+      flag = trim(lvl)
+    end select
+  end function xtb_level_flag
 
 !========================================================================================!
 !========================================================================================!

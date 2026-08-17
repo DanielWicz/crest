@@ -50,10 +50,10 @@ subroutine xtbsp_legacy(env,xtblevel)
     case (3)
       xtbflag = '--gfnff'
     case default
-      xtbflag = trim(env%gfnver)
+      xtbflag = xtb_level_flag(env%gfnver)
     end select
   else
-    xtbflag = trim(env%gfnver)
+    xtbflag = xtb_level_flag(env%gfnver)
   end if
 !---- setting threads
   call new_ompautoset(env,'auto',1,T,Tn)
@@ -105,7 +105,7 @@ subroutine xtbsp2_legacy(fname,env)
   jobcall = ""
   jobcall = trim(jobcall)//trim(env%ProgName)
   jobcall = trim(jobcall)//" "//trim(fname)//" --sp --wbo"
-  jobcall = trim(jobcall)//" "//trim(env%gfnver)
+  jobcall = trim(jobcall)//" "//xtb_level_flag(env%gfnver)
   jobcall = trim(jobcall)//" "//trim(env%solv)
   if (env%chrg /= 0) then
     write (chrgstr,'(i0)') env%chrg
@@ -188,7 +188,7 @@ subroutine xtbopt_legacy(env)
   jobcall = ""
   jobcall = trim(jobcall)//trim(env%ProgName)
   jobcall = trim(jobcall)//" "//trim(fname)//' --opt'
-  jobcall = trim(jobcall)//" "//trim(env%gfnver)
+  jobcall = trim(jobcall)//" "//xtb_level_flag(env%gfnver)
   jobcall = trim(jobcall)//" "//trim(env%solv)
   if (env%chrg /= 0) then
     jobcall = trim(jobcall)//" --chrg "//to_str(env%chrg)
@@ -321,11 +321,11 @@ subroutine MetaMD_para_OMP(env)
   pipe = ' > xtb.out 2>/dev/null'
 
   write (jobcall,'(a,1x,a,1x,a,1x,''--md'',1x,a,1x,a,a)') &
-  &     trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),pipe
+  &     trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),pipe
   !--- slightly different jobcall for QMDFF usage
   if (env%useqmdff) then
     write (jobcall,'(a,1x,a,1x,a,1x,''--md --qmdff'',1x,a,1x,a,a)') &
-    &     trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),pipe
+    &     trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),pipe
   end if
 
 !---- Small Header
@@ -1168,7 +1168,7 @@ subroutine catchdiatomic_legacy(env)
   close (ich)
   !create the system call (it is the same for every optimization)
   write (jobcall,'(a,1x,a,1x,a,'' --opt '',a,1x,a,'' --ceasefiles  >xtb.out'')') &
- &    trim(env%ProgName),conformerfile,trim(env%gfnver),trim(env%solv),' 2>/dev/null'
+ &    trim(env%ProgName),conformerfile,xtb_level_flag(env%gfnver),trim(env%solv),' 2>/dev/null'
   call command(trim(jobcall), ich)
   call copy('xtbopt.xyz',conformerfile)
   call copy(conformerfile,'crest_rotamers.xyz')

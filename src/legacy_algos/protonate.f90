@@ -234,7 +234,7 @@ subroutine xtblmo(env,pr)
   write (*,'('' LMO calculation ... '')',advance='no')
   jobcall = trim(env%ProgName)
   jobcall = trim(jobcall)//' '//trim(fname)
-  jobcall = trim(jobcall)//' '//trim(env%gfnver)
+  jobcall = trim(jobcall)//' '//xtb_level_flag(env%gfnver)
   jobcall = trim(jobcall)//' --sp --lmo '//trim(env%solv) 
   jobcall = trim(jobcall)//trim(pipe)
   call command(trim(jobcall),io)
@@ -438,7 +438,7 @@ subroutine rescore_protomer_ensemble(env,iname)
     call remove('xtbrestart')
 
     call wrxyz(tmpxyz,nat,at,xyz(:,:,i))
-    jobcall = 'timeout 600 '//trim(env%ProgName)//' '//tmpxyz//' --sp '//trim(env%gfnver)// &
+    jobcall = 'timeout 600 '//trim(env%ProgName)//' '//tmpxyz//' --sp '//xtb_level_flag(env%gfnver)// &
     & ' '//trim(env%solv)
     if (env%chrg /= 0) jobcall = trim(jobcall)//' --chrg '//to_str(env%chrg)
     if (env%uhf /= 0) jobcall = trim(jobcall)//' --uhf '//to_str(env%uhf)

@@ -79,21 +79,21 @@ subroutine confopt(env,xyz,TMPCONF,confcross)
 
       !create the system call (it is the same for every optimization)
       write(jobcall,'(a,1x,a,1x,a,'' --opt '',a,1x,a,'' >xtb.out'')') &
-      &    trim(env%ProgName),trim(xyz),trim(env%gfnver),trim(env%solv),trim(pipe)
+      &    trim(env%ProgName),trim(xyz),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
       if(env%useqmdff)then
       write(jobcall,'(a,1x,a,1x,a,'' --opt --qmdff '',a,1x,a,'' >xtb.out'')') &
-      &    trim(env%ProgName),trim(xyz),trim(env%gfnver),trim(env%solv),trim(pipe)
+      &    trim(env%ProgName),trim(xyz),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
       endif
       if(env%altopt)then
       write(jobcall,'(a,1x,a,1x,a,'' --ceasefiles --opt '',a,1x,a,'' >xtb.out'')') &
-      &    trim(env%ProgName),trim(xyz),trim(env%gfnver2),trim(env%solv),trim(pipe)
+      &    trim(env%ProgName),trim(xyz),xtb_level_flag(env%gfnver2),trim(env%solv),trim(pipe)
       env%reweight=.false.
       endif
 
  
       if(env%reweight)then
         write(jobcall2,'(a,1x,a,1x,a,'' --sp '',a,1x,a,'' >xtb.out'')') &
-      &    trim(env%ProgName),'xtbopt.xyz',trim(env%gfnver2),trim(env%solv),trim(pipe)
+      &    trim(env%ProgName),'xtbopt.xyz',xtb_level_flag(env%gfnver2),trim(env%solv),trim(pipe)
         jobcall = trim(jobcall)//' ; '//trim(jobcall2)
       endif
 
@@ -336,20 +336,20 @@ subroutine MDopt_para_inplace(env,ensnam,multilev)
 !---- the jobcall
       !create the system call (it is the same for every optimization)
       write(jobcall,'(a,1x,a,1x,a,'' --ceasefiles --opt '',a,1x,a,'' >xtb.out'')') &
-      &    trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),trim(pipe)
+      &    trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
       if(env%useqmdff)then
       write(jobcall,'(a,1x,a,1x,a,'' --ceasefiles --opt --qmdff '',a,1x,a,'' >xtb.out'')') &
-      &    trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),trim(pipe)
+      &    trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),trim(pipe)
       endif
       if(env%altopt)then
       write(jobcall,'(a,1x,a,1x,a,'' --ceasefiles --opt '',a,1x,a,'' >xtb.out'')') &
-      &    trim(env%ProgName),trim(fname),trim(env%gfnver2),trim(env%solv),trim(pipe)
+      &    trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver2),trim(env%solv),trim(pipe)
       env%reweight=.false.
       endif
 
       if(env%reweight)then
         write(jobcall2,'(a,1x,a,1x,a,'' --ceasefiles --sp '',a,1x,a,'' >xtb.out'')') &
-      &    trim(env%ProgName),'xtbopt.xyz',trim(env%gfnver2),trim(env%solv),trim(pipe)
+      &    trim(env%ProgName),'xtbopt.xyz',xtb_level_flag(env%gfnver2),trim(env%solv),trim(pipe)
         jobcall = trim(jobcall)//' ; '//trim(jobcall2)
       endif
 

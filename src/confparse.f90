@@ -1828,9 +1828,51 @@ subroutine parseflags(env,arg,nra)
       case ('-normdock')
         env%docking_qcg_flag = ''
       case ('-fin_opt_gfn2')
+        !> historical spelling of '-scorelvl gfn2'
         env%final_gfn2_opt = .true.
+        env%score_lvl = '--gfn2'
       case ('-no_fin_opt_gfn2')
         env%final_gfn2_opt = .false.
+        env%score_lvl = ''
+      case ('-scorelvl')
+        !> Level for the FINAL optimisation + single point of ALL THREE terms of
+        !> dGsolv (solute cluster, CFF solvent cluster, gas-phase monomer).
+        !> Decouples the SCORING level from the SAMPLING level (-enslvl), so the
+        !> ensemble can be searched cheaply and scored with an accurate method.
+        !> Before this flag existed the scoring level was pinned to whatever
+        !> -enslvl was (default '--gff', i.e. GFN-FF) or to a hardcoded '--gfn2'.
+        env%qcg_flag = .true.
+        ctmp = arg(i+1)
+        if (arg(i+1) == 'gfn') then
+          dtmp = trim(arg(i+2))
+          ctmp = trim(ctmp)//dtmp
+        end if
+        select case (ctmp)
+        case ('gfn1')
+          env%score_lvl = '--gfn1'
+        case ('gfn2')
+          env%score_lvl = '--gfn2'
+        case ('gfn0')
+          env%score_lvl = '--gfn0'
+        case ('gff','gfnff')
+          env%score_lvl = '--gff'
+        case ('gxtb')
+          !> bare 'gxtb' on purpose: the new calculator API matches it exactly,
+          !> and the legacy jobcalls go through xtb_level_flag() (classes.f90)
+          env%score_lvl = 'gxtb'
+        case ('gxtb_dev')
+          env%score_lvl = 'gxtb_dev'
+        case default
+          !> never fail open on a level string -- see the -enslvl case below
+          write (stderr,'(/,a,1x,a)') '**ERROR** -scorelvl : unknown method', &
+          & "'"//trim(ctmp)//"'"
+          write (stderr,'(a)') '          allowed values are: gfn0, gfn1, gfn2, gff (=gfnff), gxtb'
+          flush (stderr)
+          error stop 1
+        end select
+        env%final_gfn2_opt = .true.  !> reuse the final-opt machinery
+        write (*,'(2x,a,1x,a,1x,a)') 'Final QCG scoring (opt + SP of all dGsolv terms) at', &
+        & trim(env%score_lvl),'requested.'
       case ('-directed') !> specify the directed list
         env%qcg_flag = .true.
         ctmp = trim(arg(i+1))
@@ -2208,8 +2250,56 @@ subroutine parseflags(env,arg,nra)
       env%lmover = env%gfnver
     end if
   end if
-  if (env%ensemble_opt == '--gfn2'.or.env%gfnver == '--gfn2') &
-          & env%final_gfn2_opt = .false. !Prevent additional opt.
+!>--- QCG: decide whether the final scoring pass is redundant, and CHECK that the
+!>    three terms of dGsolv end up at the same level of theory.
+!>
+!>    dGsolv = <G>_solute_cluster - <G>_solvent_cluster - G_monomer - w_V
+!>    (src/qcg/solvtool.f90, subroutine qcg_eval). The cluster energies come from
+!>    env%ensemble_opt, the gas-phase monomer from env%gfnver, unless the final
+!>    scoring pass recomputes all three at env%score_lvl.
+!>
+!>    *** BUGFIX -- the line replaced here was
+!>          if (ensemble_opt == '--gfn2' .or. gfnver == '--gfn2') final_gfn2_opt = .false.
+!>        which fails open twice over:
+!>          1. '.or.' switches the scoring pass off when only ONE of the two terms
+!>             is already at GFN2, leaving a difference of total energies taken
+!>             from two DIFFERENT Hamiltonians (GFN-FF and GFN2 water differ by
+!>             4.74 Eh = 2975 kcal/mol -- not a small inconsistency);
+!>          2. it silently cancels an explicit '-scorelvl gxtb' whenever the
+!>             sampling level happens to be GFN2.
+  if (env%crestver == crest_solv) then
+    if (len_trim(env%score_lvl) > 0) then
+      !> redundant only if EVERY term is already at the requested scoring level
+      if (trim(env%score_lvl) == trim(env%ensemble_opt) .and. &
+      &   trim(env%score_lvl) == trim(env%gfnver)) then
+        env%final_gfn2_opt = .false.
+      end if
+    else if (env%ensemble_opt == '--gfn2'.and.env%gfnver == '--gfn2') then
+      env%final_gfn2_opt = .false. !Prevent additional opt.
+    end if
+
+    !>--- hard gate: a mixed-level dGsolv is not a free energy, refuse to run
+    if (env%qcg_runtype .ge. 2) then
+      if (env%final_gfn2_opt) then
+        ctmp = trim(env%score_lvl)   !> all three terms recomputed here
+        dtmp = trim(env%score_lvl)
+      else
+        ctmp = trim(env%ensemble_opt) !> cluster energies
+        dtmp = trim(env%gfnver)       !> gas-phase monomer energy
+      end if
+      if (trim(ctmp) /= trim(dtmp)) then
+        write (stderr,'(/,a)') '**ERROR** QCG dGsolv would mix levels of theory:'
+        write (stderr,'(a,1x,a)') '          cluster energies   :',trim(ctmp)
+        write (stderr,'(a,1x,a)') '          gas-phase monomer  :',trim(dtmp)
+        write (stderr,'(a)') '          dGsolv is a DIFFERENCE of total energies, so both must'
+        write (stderr,'(a)') '          come from the same Hamiltonian. Fix it with either'
+        write (stderr,'(a)') '            -scorelvl <method>   (recompute all terms at <method>), or'
+        write (stderr,'(a)') '            matching -enslvl <method> and -<method> for the growth.'
+        flush (stderr)
+        error stop 1
+      end if
+    end if
+  end if
 
   if (env%useqmdff) then
     env%autozsort = .false.

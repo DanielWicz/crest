@@ -178,11 +178,11 @@ subroutine normalMD_para_OMP(env,lconf,ntemps)
   pipe = ' > xtb.out 2>/dev/null'
 
   write (jobcall,'(a,1x,a,1x,a,'' --md '',a,1x,a,a)') &
-  &     trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),pipe
+  &     trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),pipe
   !--- slightly different jobcall for QMDFF usage
   if (env%useqmdff) then
     write (jobcall,'(a,1x,a,1x,a,'' --md --qmdff'',a,1x,a,a)') &
-    &     trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),pipe
+    &     trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),pipe
   end if
 
 !---- Small Header
@@ -398,7 +398,7 @@ subroutine entropyMD_para_OMP(env)
     pipe = ' > xtb.out 2>/dev/null'
 
     write (jobcall,'(a,1x,a,1x,a,'' --md '',a,1x,a,a)') &
-    &     trim(env%ProgName),trim(fname),trim(env%gfnver),trim(env%solv),pipe
+    &     trim(env%ProgName),trim(fname),xtb_level_flag(env%gfnver),trim(env%solv),pipe
 
 !---- Small Header
     write (*,'(''-----------------------------------------------'')')

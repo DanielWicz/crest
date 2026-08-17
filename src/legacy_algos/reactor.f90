@@ -727,7 +727,7 @@ subroutine reactorreopt(env,nat,at,nall,xyz,taken,frags,ndirs)
     write(*,'(1x,i0,'' jobs to do.'')')ndirs
 
     write(jobcall,'(a,1x,a,1x,a,1x,a)')trim(env%ProgName),xnam, &
-    &  trim(env%gfnver),'--opt >xtb.out 2>>xtb.out'
+    &  xtb_level_flag(env%gfnver),'--opt >xtb.out 2>>xtb.out'
     call opt_OMP_loop(ndirs,'TMPFRG',jobcall,env%niceprint)
     write(*,'(/,1x,a)') 'done.'
     call chdir(trim(thispath)) !return
