@@ -779,6 +779,86 @@ end subroutine ens_sp
 
 !___________________________________________________________________________________
 !
+! CHARGE ENFORCEMENT for the terms that enter dGsolv.
+!___________________________________________________________________________________
+!> Assert that the charge xtb ACTUALLY used equals the charge this term is
+!> supposed to carry, and abort otherwise.
+!>
+!> WHY THIS EXISTS (measured 2026-08-17).  No QCG jobcall passes --chrg; the
+!> charge is taken entirely from a `.CHRG` file placed in the working directory
+!> by `copysub`, and copying a file that is not there is a SILENT NO-OP. xtb then
+!> defaults to a neutral system and reports "normal termination", so a charged
+!> solute was scored as neutral with no warning anywhere. Consequences measured
+!> on acetate(-1):
+!>     stored solute-cluster energy   -83.5040963 Eh
+!>     charge-0 single point          -83.504096341918 Eh   <- matches to 9 dp
+!>     correct charge -1 value        -83.917986727065 Eh
+!> i.e. +259.7 kcal/mol on one term, dGsolv +188.87 instead of about -60.
+!> For a CATION the same defect is only -8.03 kcal/mol, which looks like a
+!> plausible answer -- so this class of bug is INVISIBLE on cations and must be
+!> caught mechanically rather than by inspection.
+!>
+!> Fail CLOSED: a missing charge line is an error too, never "assume neutral".
+subroutine qcg_assert_netcharge(outfile, expected, ctx)
+   use iso_fortran_env, only: wp => real64, stderr => error_unit
+   use iomod
+   implicit none
+   character(len=*), intent(in) :: outfile   !> an xtb output file
+   integer, intent(in)          :: expected  !> charge this term must carry
+   character(len=*), intent(in) :: ctx       !> label for the error message
+
+   integer            :: ich, io, found, ipos, got
+   character(len=512) :: line
+   logical            :: ex
+
+   inquire (file=outfile, exist=ex)
+   if (.not. ex) then
+      write (stderr, '(/,a,1x,a)') '**ERROR** qcg_assert_netcharge: missing output', trim(outfile)
+      write (stderr, '(a,1x,a)') '          context:', trim(ctx)
+      flush (stderr)
+      error stop 1
+   end if
+
+   found = -huge(1)
+   open (newunit=ich, file=outfile, status='old', action='read')
+   do
+      read (ich, '(a)', iostat=io) line
+      if (io /= 0) exit
+      ipos = index(line, 'net charge')
+      if (ipos > 0) then
+         !> xtb prints e.g. "   :  net charge                  -1          :"
+         read (line(ipos + 10:), *, iostat=io) got
+         if (io == 0) found = got
+      end if
+   end do
+   close (ich)
+
+   if (found == -huge(1)) then
+      write (stderr, '(/,a)') '**ERROR** qcg_assert_netcharge: no "net charge" line found in'
+      write (stderr, '(a,1x,a)') '         ', trim(outfile)
+      write (stderr, '(a,1x,a)') '          context:', trim(ctx)
+      write (stderr, '(a)') '          Refusing to assume a charge. Fix the charge plumbing.'
+      flush (stderr)
+      error stop 1
+   end if
+
+   if (found /= expected) then
+      write (stderr, '(/,a)') '**ERROR** QCG charge mismatch -- this term of dGsolv is wrong.'
+      write (stderr, '(a,1x,a)') '          context :', trim(ctx)
+      write (stderr, '(a,1x,a)') '          output  :', trim(outfile)
+      write (stderr, '(a,1x,i0)') '          expected:', expected
+      write (stderr, '(a,1x,i0)') '          xtb used:', found
+      write (stderr, '(a)') '          dGsolv is a difference of total energies, so a wrong'
+      write (stderr, '(a)') '          charge on one term is not a small error: measured'
+      write (stderr, '(a)') '          +259.7 kcal/mol for a monoanion. Refusing to continue.'
+      flush (stderr)
+      error stop 1
+   end if
+
+end subroutine qcg_assert_netcharge
+
+!___________________________________________________________________________________
+!
 ! xTB Freq compuatation performed in parallel
 !___________________________________________________________________________________
 

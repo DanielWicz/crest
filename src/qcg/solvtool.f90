@@ -246,6 +246,8 @@ subroutine qcg_setup(env, solu, solv)
       call env_apply_calclevel(env)  !> keep the new calculator in sync (see legacy_wrappers.f90)
    end if
 
+   !> GAS-PHASE MONOMER term of dGsolv: carries the molecular charge.
+   call qcg_assert_netcharge('xtb.out', env%chrg, 'gas-phase solute monomer SP')
    call grepval('xtb.out', '| TOTAL ENERGY', e_there, solu%energy)
    if (.not. e_there) then
       write (*, *) 'Total Energy of solute not found'
@@ -1302,6 +1304,24 @@ subroutine qcg_ensemble(env, solu, solv, clus, ens, tim, fname_results)
       io = makedir(trim(to))
       call copysub('.UHF', to)
       call copysub('.CHRG', to)
+      !> *** CHARGE FAIL-OPEN, FIXED (measured 2026-08-17) ***
+      !> These TMPSP directories hold the single points whose energies become
+      !> ens%er, i.e. the SOLUTE-CLUSTER term of dGsolv. No QCG jobcall passes
+      !> --chrg (only xtb_lmo does), so the charge is taken ENTIRELY from a .CHRG
+      !> file. The copysub above copies from the CURRENT directory, which at this
+      !> point does not contain .CHRG -- copying a missing file is a silent
+      !> no-op, and xtb then defaults to a NEUTRAL system.
+      !> Measured on acetate(-1) + 8 acetonitrile: the stored ensemble energy
+      !> -83.5040963 Eh reproduces a charge-0 single point to 9 decimals
+      !> (-83.504096341918) while the correct charge -1 value is
+      !> -83.917986727065, i.e. the term was wrong by +259.7 kcal/mol and
+      !> dGsolv came out +188.87 instead of about -60. For a CATION the same
+      !> defect is only -8.03 kcal/mol, so it is nearly INVISIBLE there
+      !> (ammonium/water gave -94.09, correcting to -86.1) -- never validate
+      !> this path on cations alone.
+      !> Write the file DIRECTLY into the target directory so it cannot no-op.
+      !> wrtCHRG is a no-op when chrg == 0, so neutral solutes are unaffected.
+      call env%wrtCHRG(trim(to))
       call chdir(to)
       call wrxyz('cluster.xyz', clus%nat, clus%at, clus%xyz*bohr)
       call chdir(tmppath2)
@@ -1314,6 +1334,8 @@ subroutine qcg_ensemble(env, solu, solv, clus, ens, tim, fname_results)
       call rdxmolselec('ensemble.xyz', i, clus%nat, clus%at, clus%xyz)
       write (to, '("TMPSP",i0)') i
       call chdir(to)
+      !> SOLUTE-CLUSTER term of dGsolv: must carry the molecular charge.
+      call qcg_assert_netcharge('xtb_sp.out', env%chrg, 'solute cluster SP (ens_sp/TMPSP)')
       call grepval('xtb_sp.out', '| TOTAL ENERGY', e_there, ens%er(i))
       call chdir(tmppath2)
    end do
@@ -1887,6 +1909,11 @@ subroutine qcg_cff(env, solu, solv, clus, ens, solv_ens, tim)
       call rdcoord('final_cluster.coord', clus%nat, clus%at, clus%xyz)
 
 !--- Getting energy and calculating properties
+      !> SOLVENT-CLUSTER (CFF) reference term: pure solvent, NEUTRAL by
+      !> construction. Asserting 0 here is what stops the solute's charge from
+      !> ever leaking into the reference (see the latent copysub hazard noted in
+      !> the tmp_solv frequency loop).
+      call qcg_assert_netcharge('xtb_sp.out', 0, 'CFF solvent cluster SP (cff_opt/TMPCFF)')
       call grepval('xtb_sp.out', '| TOTAL ENERGY', e_there, e_cluster(i))
       call grepval('xtb_sp.out', '         :: add. restraining', e_there, e_fix(i))
       e_fix(i) = e_fix(i)*eh/sqrt(float(clus%nat))
@@ -2040,10 +2067,19 @@ subroutine qcg_freq(env, tim, solu, solv, solu_ens, solv_ens)
    f = makedir('tmp_solu')
    call copysub('.CHRG', 'tmp_solu')
    call copysub('.UHF', 'tmp_solu')
+   !> SOLUTE side carries the molecular charge -- see the fail-open note in the
+   !> TMPSP loop above. The copysub calls no-op because .CHRG is not in the CWD
+   !> here either, which silently gave NEUTRAL RRHO for the charged solute.
+   call env%wrtCHRG('tmp_solu')
    g = makedir('tmp_solv')
+   !> NOTE: tmp_solv is the pure-SOLVENT cluster and must stay NEUTRAL. Do NOT
+   !> add a wrtCHRG call for it. Verified correct: tmp_CFF and tmp_solv both ran
+   !> at net charge 0 while the solute side ran at -1.
    h = makedir('tmp_gas1') !One solute molecule
    call copysub('.CHRG', 'tmp_gas1')
    call copysub('.UHF', 'tmp_gas1')
+   !> tmp_gas1 is the GAS-PHASE SOLUTE monomer; its RRHO enters G_mono.
+   call env%wrtCHRG('tmp_gas1')
 
 !--- Frequencies solute molecule
    write (*, *) '  SOLUTE MOLECULE'
@@ -2082,6 +2118,9 @@ subroutine qcg_freq(env, tim, solu, solv, solu_ens, solv_ens)
       io = makedir(trim(to))
       call copysub('.UHF', to)
       call copysub('.CHRG', to)
+      !> SOLUTE-cluster frequencies: charged. Same silent no-op as TMPSP above,
+      !> so these RRHO terms were computed on a neutral system.
+      call env%wrtCHRG(trim(to))
       call chdir(to)
       open (newunit=ich65, file='cluster.xyz')
       call wrxyz(ich65, clus%nat, clus%at, clus%xyz*bohr)
@@ -2130,6 +2169,12 @@ subroutine qcg_freq(env, tim, solu, solv, solu_ens, solv_ens)
          write (to, '("TMPFREQ",i0)') i
          io = makedir(trim(to))
          call copysub('.UHF', to)
+         !> DELIBERATELY NO CHARGE HERE. This is the pure-SOLVENT reference
+         !> cluster, which is neutral. The '.CHRG' copysub kept below is a LATENT
+         !> HAZARD: it is currently a silent no-op only because .CHRG happens not
+         !> to be in the CWD, and if a future change puts one there the solvent
+         !> reference would silently acquire the SOLUTE's charge and corrupt
+         !> dGsolv. Do not "fix" it by making the copy succeed.
          call copysub('.CHRG', to)
          call chdir(to)
          open (newunit=ich65, file='solv_cluster.xyz')
