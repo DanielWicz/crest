@@ -126,6 +126,48 @@ If no such file is present as the first argument **crest** will automatically se
 
 *-gfn2//gfnff*::
   GFN2-xTB//GFN-FF composite mode.
+  **Legacy only** -- this flag requires **-legacy** and aborts on the modern
+  calculator path. Use *-rsp* / *-ropt* below instead.
+
+*-gxtb*::
+  Use g-xTB, run through the **xtb**(1) binary (`xtb --gxtb`).
+  Requires an **xtb**(1) build with the g-xTB backend.
+
+*-draco* [_set_]::
+  Charge-dependent solvation cavity radii, applied by the **xtb**(1) binary on
+  top of an implicit solvation model, so it requires *-alpb* or *-gbsa*.
+  Works with every method run through the xtb binary: GFN1, GFN2, GFN-FF and
+  g-xTB.
+
+  * _set_ = **ddg** [_default_], **gsolv**, **pka**
+
+*Sampling with one method and rescoring with another:*
+
+CREST can sample and optimize with a cheap method and then re-evaluate the
+resulting ensemble with a better one.
+
+*-rsp* _lev_, *-refine* _lev_::
+  Re-rank the optimized ensemble with singlepoint energies at _lev_.
+  Sampling and geometry optimization stay at the main method.
+
+*-ropt* _lev_::
+  Re-**optimize** the final ensemble at _lev_ instead of only re-ranking it.
+  Considerably more expensive, and the only option that repairs the
+  **geometries**: an ensemble optimized with a cheaper Hamiltonian is typically
+  redundant on the target surface, because distinct low-level conformers relax
+  onto the same high-level minimum.
++
+  * _lev_ = **gfn0**, **gfn1**, **gfn2**, **gff** (=**gfnff**), **gxtb**,
+    **gxtb_dev**. Any other value is a hard error. Levels beyond this list
+    (tblite, ORCA, ...) must be set up in a TOML input file.
+
+*-refineonce*::
+  Rescore only the final ensemble, instead of after every stage of the
+  multilevel optimization. Much cheaper. In exchange, the intermediate CREGEN
+  cuts are then made with the sampling method's energies rather than the
+  rescoring method's. Implied by *-ropt*.
+
+  Example: `crest struc.xyz -gfnff -rsp gfn2`
 
 *Adding additional constraints to the calculations:*
 

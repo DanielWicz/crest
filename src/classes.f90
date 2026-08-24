@@ -390,6 +390,11 @@ module crest_data
     character(len=:),allocatable :: draco
     character(len=20)  :: gfnver         !> GFN version
     character(len=20)  :: gfnver2        !> GFN version (multilevel)
+    !> Which refinement stage the command-line -refine/-rsp/-ropt flag asks for.
+    !> -refine/-rsp -> refine%singlepoint (re-rank the optimised ensemble with
+    !> singlepoints at gfnver2), -ropt -> refine%geoopt (re-OPTIMISE at gfnver2).
+    !> Consumed by env2calc (src/legacy_wrappers.f90).
+    integer :: refine_lvl_cli = 1        !> = refine%singlepoint
     character(len=20)  :: lmover         !> GFN version for LMO computation in xtb_lmo subroutine
     character(len=512) :: ProgName       !> name of the xtb executable (+ path)
     character(len=512) :: ProgIFF        !> name of xtbiff for QCG-mode
@@ -606,6 +611,13 @@ module crest_data
     logical :: reweight = .false.    !> reweight structures on the fly after optimizations (i.e. do SPs)?
     logical :: riso = .false.        !> take only isomers in reactor mode
     logical :: rotamermds            !> do additional MDs after second  multilevel OPT step in V2 ?
+    !> Restrict ensemble refinement to the LAST stage of the FINAL ensemble
+    !> optimization instead of running it after every multilevel stage.
+    !> Much cheaper (see crest_multilevel_oloop for the measured numbers), but
+    !> it moves every intermediate CREGEN cut from the rescoring level's
+    !> ranking to the sampling level's, so it is opt-in. Forced on when the
+    !> refinement queue contains a geometry optimization.
+    logical :: refine_final_only = .false.
     logical :: refine_presort = .false.  !> run CREGEN at the beginning of crest_refine?
     logical :: refine_esort   = .false.  !> if CREGEN is run after crest_refine, only sort energy?
     logical :: sameRandomNumber = .false. !> QCG related, choose same random number for iff

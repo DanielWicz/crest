@@ -194,10 +194,32 @@ subroutine confscript_morehelp(flag)
     write (*,'(5x,''-gfn0              : use GFN0-xTB'')')
     write (*,'(5x,''-gff, -gfnff       : use GFN-FF (requires xtb 6.3 or newer)'')')
     write (*,'(5x,''                     (for GFN-FF searches bond constraints are applied automatically)'')')
-    write (*,'(5x,''-gfn2//gfnff       : GFN2-xTB//GFN-FF composite mode)'')')
+    write (*,'(5x,''-gfn2//gfnff       : GFN2-xTB//GFN-FF composite mode'')')
+    write (*,'(5x,''                     (LEGACY only, requires -legacy;'')')
+    write (*,'(5x,''                     use -rsp/-ropt below instead)'')')
     write (*,'(5x,''-gxtb              : use g-xTB, run through the xtb binary'')')
     write (*,'(5x,''                     (xtb --gxtb; requires an xtb build with'')')
     write (*,'(5x,''                     the g-xTB backend)'')')
+    write (*,*)
+    write (*,'(3x,''Sampling with a cheap method and rescoring with a better one:'')')
+    write (*,'(5x,''-rsp <lvl>         : re-rank the optimized ensemble with'')')
+    write (*,'(5x,''-refine <lvl>        singlepoints at <lvl>. Sampling and'')')
+    write (*,'(5x,''                     optimization stay at the main method.'')')
+    write (*,'(5x,''-ropt <lvl>        : re-OPTIMIZE the final ensemble at <lvl>'')')
+    write (*,'(5x,''                     instead. Much more expensive, and the'')')
+    write (*,'(5x,''                     only option that fixes the GEOMETRIES.'')')
+    write (*,'(5x,''                     accepted <lvl>: gfn0, gfn1, gfn2,'')')
+    write (*,'(5x,''                     gff (=gfnff), gxtb, gxtb_dev.'')')
+    write (*,'(5x,''                     Anything else is a hard error. Other'')')
+    write (*,'(5x,''                     levels (tblite, orca, ...) can be set'')')
+    write (*,'(5x,''                     up in a TOML input file.'')')
+    write (*,'(5x,''-refineonce        : rescore only the FINAL ensemble instead'')')
+    write (*,'(5x,''                     of after every multilevel stage. Much'')')
+    write (*,'(5x,''                     cheaper; in exchange the intermediate'')')
+    write (*,'(5x,''                     CREGEN cuts are then made with the'')')
+    write (*,'(5x,''                     SAMPLING method energies.'')')
+    write (*,'(5x,''                     (implied for -ropt)'')')
+    write (*,'(5x,''  e.g.  crest struc.xyz -gfnff -rsp gfn2'')')
     write (*,'(3x,''Adding additional constraints to the calculations:'')')
     write (*,'(3x,''The user is able to include additional constraints to ALL'')')
     write (*,'(3x,''xtb calculations that are conducted by CREST.'')')
@@ -1301,21 +1323,9 @@ end subroutine printprogbar
 !========================================================================================!
 !========================================================================================!
 
-subroutine gxtb_dev_warning
-  use crest_parameters
-  use crest_data, only: status_ioerr
-  write (stdout,*)
-  write (stdout,'(a)') "!!! WARNING !!!"
-  write (stdout,'(a)') "You have selected g-xTB for your calculations, but currently only the"
-  write (stdout,'(a)') "preliminary binary version is available."
-  write (stdout,'(a)') "This version does NOT HAVE ANALYTICAL GRADIENTS available and uses"
-  write (stdout,'(a)') "NUMERICAL gradients which are SLOW and NOISY."
-  write (stdout,*)
-  write (stdout,'(a)') 'The cmd argument "--gxtb" will be disabled until an implementation'
-  write(stdout,'(a)')  'with analytical gradients is available'
-  write(stdout,*)
-  write (stdout,'(a)') 'Please use "--gxtb_dev" in the mean time.'
-  write (stdout,'(a)') "Make sure you have the dev version gxtb installed (https://github.com/grimme-lab/g-xtb)"
-  write(stdout,*)
-  call creststop(status_ioerr)
-end subroutine gxtb_dev_warning
+!> REMOVED: subroutine gxtb_dev_warning.
+!> It was never called from anywhere in the tree, and it told the user that
+!> "--gxtb will be disabled until an implementation with analytical gradients
+!> is available" and to use --gxtb_dev instead. That has not been true since
+!> the xtb build in use here gained an analytic g-xTB gradient, and it directly
+!> contradicted the --help text, which documents -gxtb as usable.

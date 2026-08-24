@@ -179,6 +179,12 @@ contains  !> MODULE PROCEDURES START HERE
         !==========================================!
         call potential_core(molptr,calc,i,iostatus)
         !==========================================!
+        !> Check here, not after numgrad_core: a potential that already failed
+        !> must not be displaced 6N more times, each failing again.
+        if (iostatus /= 0) then
+          return
+        end if
+        !==========================================!
         !> and numerical gradient, if selected
         !==========================================!
         call numgrad_core(molptr,calc,i,iostatus)
@@ -320,7 +326,16 @@ contains  !> MODULE PROCEDURES START HERE
     integer :: pnat
     real(wp) :: dum1,dum2
 
-    if (id > calc%ncalculations) return
+    !> iostatus is intent(out) and used to be left UNSET on two paths (the
+    !> bounds guard below and the select-case fallthrough), so the caller kept
+    !> whatever it had - in practice the 0 set at the top of engrad_mol, i.e. a
+    !> SUCCESS status for a calculation that never ran.
+    iostatus = 0
+
+    if (id > calc%ncalculations) then
+      iostatus = 1
+      return
+    end if
 
     pnat = molptr%nat
 
@@ -378,9 +393,22 @@ contains  !> MODULE PROCEDURES START HERE
       &              calc%etmp(id),calc%grdtmp(:,1:pnat,id))
       calc%grdtmp(:,:,id) = calc%grdtmp(:,:,id)*autoaa
 
-    case default
+    case (jobtype%unknown)
+      !> A deliberate no-op level: the TOML parser maps method = 'none' here
+      !> (src/parsing/parse_calcdata.f90). It contributes nothing to the
+      !> weighted sum, but constraints still apply, so this is a SUCCESS.
       calc%etmp(id) = 0.0_wp
       calc%grdtmp(:,:,id) = 0.0_wp
+
+    case default
+      !> A job type with no engrad implementation. jobtype%terachem is the live
+      !> example: the TOML parser accepts method = 'terachem' and it even has a
+      !> description and a shortflag, but no terachem_engrad exists anywhere in
+      !> the tree. Falling through here used to return E = 0.0 Eh with a SUCCESS
+      !> status, which silently re-ranks an entire ensemble at zero. Fail loud.
+      calc%etmp(id) = 0.0_wp
+      calc%grdtmp(:,:,id) = 0.0_wp
+      iostatus = 1
     end select
 
   end subroutine potential_core
@@ -394,7 +422,12 @@ contains  !> MODULE PROCEDURES START HERE
     type(coord),intent(in)       :: molptr
     type(calcdata),intent(inout) :: calc
     integer,intent(in)           :: id
-    integer,intent(out)          :: iostatus
+    !> intent(inout), NOT intent(out): the two early returns below are the
+    !> common path (most calculators do not want a numerical gradient), and an
+    !> intent(out) dummy that is never assigned leaves the caller's status
+    !> formally undefined -- which is exactly how a failed potential_core used
+    !> to be reported as success.
+    integer,intent(inout)        :: iostatus
 
     integer :: i,j,k,l,ich,och,io,pnat
     type(coord),allocatable :: moltmp

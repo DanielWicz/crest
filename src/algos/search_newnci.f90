@@ -31,7 +31,9 @@ subroutine crest_search_newnci(env,tim)
   use iomod
   use utilities
   use cregen_interface
+  use multilevel_interface
   implicit none
+
   type(systemdata),intent(inout) :: env
   type(timer),intent(inout)      :: tim
   type(coord) :: mol,molnew
@@ -192,7 +194,7 @@ subroutine crest_search_newnci(env,tim)
   write (stdout,'(3x,''================================================'')')
   call tim%start(3,'Geometry optimization')
   call checkname_xyz(crefile,atmp,str)
-  call crest_multilevel_wrap(env,trim(atmp),0)
+  call crest_multilevel_wrap(env,trim(atmp),0,refine_here=.true.)
   call tim%stop(3)
   if(env%iostatus_meta .ne. 0 ) return
 

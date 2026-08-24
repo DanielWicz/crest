@@ -213,6 +213,7 @@ subroutine crest_ensemble_singlepoints(env,tim)
   use strucrd
   use optimize_module
   use utilities,only:dumpenergies
+  use parallel_interface   !> explicit interface: catches wrong argument lists
   implicit none
   type(systemdata),intent(inout) :: env
   type(timer),intent(inout)      :: tim
@@ -274,7 +275,13 @@ subroutine crest_ensemble_singlepoints(env,tim)
   write (stdout,*)
   write (stdout,'(1x,a,i0,a,1x,a)') 'Evaluationg all ',nall,' structures of file',trim(ensnam)
   !>--- call the loop
-  call crest_sploop(env,nat,nall,at,xyz,eread,.true.)
+  !> NOTE: crest_sploop takes no 'dump' argument. A stray .true. used to be
+  !> passed here (copy-paste from crest_oloop). It compiled only because this
+  !> routine did not use parallel_interface, so the call had an implicit
+  !> interface and the extra argument was silently discarded. Once crest_sploop
+  !> grew an optional trailing ok(:) that literal would have bound to it, and
+  !> the routine would have written nall logicals into a read-only constant.
+  call crest_sploop(env,nat,nall,at,xyz,eread)
 
 !>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<!
 !>--- Important: ensemble file must be written in AA

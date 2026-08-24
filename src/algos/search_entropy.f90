@@ -32,7 +32,9 @@ subroutine crest_search_entropy(env,tim)
   use iomod
   use utilities
   use cregen_interface
+  use multilevel_interface
   implicit none
+
   type(systemdata),intent(inout) :: env
   type(timer),intent(inout)      :: tim
   type(coord) :: mol,molnew
@@ -227,7 +229,8 @@ subroutine crest_search_entropy(env,tim)
             call checkname_xyz(crefile,atmp,btmp)
             call tim%start(3,'Geometry optimization')
             multilevel = (/.true.,.false.,.false.,.false.,.false.,.true./)
-            call crest_multilevel_oloop(env,trim(atmp),multilevel)
+            !> last optimization of this entropy iteration
+            call crest_multilevel_oloop(env,trim(atmp),multilevel,refine_here=.true.)
             call tim%stop(3)
             if(env%iostatus_meta .ne. 0 ) return
 

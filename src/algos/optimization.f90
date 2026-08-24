@@ -253,7 +253,9 @@ subroutine crest_ensemble_screening(env,tim)
   use strucrd
   use optimize_module
   use iomod 
+  use multilevel_interface
   implicit none
+
   type(systemdata),intent(inout) :: env
   type(timer),intent(inout)      :: tim
   type(coord) :: mol,molnew
@@ -314,7 +316,8 @@ subroutine crest_ensemble_screening(env,tim)
 !>--- call the loop
   call rmrfw('crest_rotamers_')
   call optlev_to_multilev(3.0d0,multilevel)
-  call crest_multilevel_oloop(env,ensnam,multilevel)
+  !> -screen IS the whole job, so its last stage is the final one
+  call crest_multilevel_oloop(env,ensnam,multilevel,refine_here=.true.)
   if(env%iostatus_meta .ne. 0 ) return
 
 !>--- printout

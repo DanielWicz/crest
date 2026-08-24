@@ -766,7 +766,11 @@ subroutine parseflags(env,arg,nra)
   end if
 !>    E.g. stereoisomer sampling or rotamer enhancement for entropy calc.
   if (env%properties == p_isomerize) then
-    env%gfnver = '-gff'    !stereoisomer generation works only with GFN-FF!
+    !> NOTE the two dashes. This used to read '-gff', which is not a level
+    !> string calculation_settings%create understands, so -isomerize silently
+    !> built a dead calculator (id = jobtype%unknown). Harmless-looking until
+    !> create() became fatal on unknown levels.
+    env%gfnver = '--gff'   !stereoisomer generation works only with GFN-FF!
   end if
   env%tsplit = 5   !timeframe splitting in conformational search for Entropy extrapolation
 
@@ -1174,10 +1178,81 @@ subroutine parseflags(env,arg,nra)
           write (*,'(2x,a,a)') argument,' : energy reweighting'
         end if
 
+      case ('-refineonce','-rfinal')
+        !> Restrict the rescoring to the FINAL ensemble optimization instead of
+        !> running it after every multilevel stage. See crest_multilevel_oloop
+        !> (src/algos/search_conformers.f90) for the measured cost and for the
+        !> pruning trade-off this accepts.
+        env%refine_final_only = .true.
+        write (*,'(2x,a)') argument//' : rescoring only the final ensemble'
+
       case ('-refine','-rsp','-ropt') !> add one refinement step (via cmd only one is possible)
         env%legacy = .false. !> new calculators only!
-        if (nra >= i+1) then
-          env%gfnver2 = trim(arg(i+1))
+        !> -rsp/-refine re-RANK the optimised ensemble with singlepoints at the
+        !> given level. -ropt re-OPTIMISES at that level, which is a different
+        !> and much more expensive thing.
+        !> Measured on 66 GFN-FF conformers of 1,4-butanediol (298 K, GFN2):
+        !>   raw GFN-FF energies       : rel. MAE 0.79 kcal/mol, Spearman 0.673,
+        !>                               population TVD 0.425 vs GFN2-optimised
+        !>   GFN2 singlepoints on those: rel. MAE 0.28 kcal/mol, Spearman 0.970,
+        !>                               population TVD 0.104, correct global min
+        !> So a singlepoint rescore removes ~3/4 of the population error and is
+        !> usually enough to RANK. What it cannot do is fix the geometries: at
+        !> CREST's own 0.125 A criterion those 66 GFN-FF conformers collapse onto
+        !> only 33 distinct GFN2 minima, i.e. the ensemble is ~2x redundant on
+        !> the target surface, and a singlepoint pass cannot see that. It also
+        !> mis-cuts: at ewin = 6 kcal/mol the singlepoint energies keep 62 of 66
+        !> structures that the re-optimisation keeps. That is what -ropt buys.
+        !> BUGFIX: -ropt used to be a silent alias of -rsp and only ever did a
+        !> singlepoint. It now does what its name says.
+        if (trim(argument) == '-ropt') then
+          env%refine_lvl_cli = refine%geoopt
+        else
+          env%refine_lvl_cli = refine%singlepoint
+        end if
+        !> BUGFIX (fail-open): this used to take arg(i+1) verbatim with no
+        !> validation. calculation_settings%create has no case default, so an
+        !> unknown level string silently produced a calculator with
+        !> id = jobtype%unknown, and potential_core then returned E = 0.0 Eh
+        !> with a SUCCESS status. `crest --mdopt ens.xyz -gfnff -refine bogus`
+        !> reported "100.0% success" and wrote an ensemble in which every energy
+        !> was 0.00000000. Never make this branch non-fatal again.
+        !> (Same class of bug as the -enslvl/-scorelvl fail-opens fixed earlier.)
+        if (nra < i+1) then
+          write (stderr,'(/,a,1x,a,1x,a)') '**ERROR**',trim(argument), &
+          & ': missing method argument'
+          write (stderr,'(a)') '          allowed values are: gfn0, gfn1, gfn2, gff (=gfnff), gxtb, gxtb_dev'
+          flush (stderr)
+          error stop 1
+        end if
+        ctmp = trim(adjustl(arg(i+1)))
+        select case (ctmp)
+        case ('gfn0','--gfn0')
+          env%gfnver2 = '--gfn0'
+        case ('gfn1','--gfn1')
+          env%gfnver2 = '--gfn1'
+        case ('gfn2','--gfn2')
+          env%gfnver2 = '--gfn2'
+        case ('gff','gfnff','--gff','--gfnff')
+          env%gfnver2 = '--gff'
+        case ('gxtb')
+          !> bare 'gxtb' on purpose: create() matches it exactly and turns it
+          !> into jobtype%xtbsys with other='--gxtb'. '--gxtb' would NOT match.
+          env%gfnver2 = 'gxtb'
+        case ('gxtb_dev')
+          env%gfnver2 = 'gxtb_dev'
+        case default
+          write (stderr,'(/,a,1x,a,1x,a,1x,a)') '**ERROR**',trim(argument), &
+          & ': unknown method',"'"//trim(ctmp)//"'"
+          write (stderr,'(a)') '          allowed values are: gfn0, gfn1, gfn2, gff (=gfnff), gxtb, gxtb_dev'
+          write (stderr,'(a)') '          (other levels, e.g. tblite or orca, must be set up in a TOML input file)'
+          flush (stderr)
+          error stop 1
+        end select
+        if (env%refine_lvl_cli == refine%geoopt) then
+          write (*,'(2x,a,1x,a,a)') argument,trim(env%gfnver2), &
+          & ' : adding refinement step (re-optimization of the ensemble)'
+        else
           write (*,'(2x,a,1x,a,a)') argument,trim(env%gfnver2), &
           & ' : adding refinement step (singlepoint on optimized structures)'
         end if

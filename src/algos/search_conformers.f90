@@ -17,6 +17,40 @@
 ! along with crest.  If not, see <https://www.gnu.org/licenses/>.
 !================================================================================!
 
+!========================================================================================!
+!> Interfaces to handle optional arguments
+!========================================================================================!
+module multilevel_interface
+!*******************************************************
+!* Interfaces to the multilevel ensemble-optimization
+!* routines defined below. Mandatory: both take an
+!* OPTIONAL argument, and Fortran requires an explicit
+!* interface for that. Same pattern as parallel_interface
+!* in src/algos/parallel.f90.
+!*******************************************************
+  implicit none
+  interface
+    subroutine crest_multilevel_oloop(env,ensnam,multilevel_in,refine_here)
+      use crest_data
+      implicit none
+      type(systemdata) :: env
+      character(len=*),intent(in) :: ensnam
+      logical,intent(in) :: multilevel_in(6)
+      logical,intent(in),optional :: refine_here
+    end subroutine crest_multilevel_oloop
+
+    subroutine crest_multilevel_wrap(env,ensnam,level,refine_here)
+      use crest_data
+      implicit none
+      type(systemdata) :: env
+      character(len=*),intent(in) :: ensnam
+      integer,intent(in) :: level
+      logical,intent(in),optional :: refine_here
+    end subroutine crest_multilevel_wrap
+  end interface
+end module multilevel_interface
+!========================================================================================!
+
 subroutine crest_search_imtdgc(env,tim)
 !*******************************************************************
 !* This is the re-implementation of CREST's iMTD-GC default workflow
@@ -34,6 +68,7 @@ subroutine crest_search_imtdgc(env,tim)
   use iomod
   use utilities
   use cregen_interface
+  use multilevel_interface
   implicit none
   type(systemdata),intent(inout) :: env
   type(timer),intent(inout)      :: tim
@@ -240,7 +275,7 @@ subroutine crest_search_imtdgc(env,tim)
     write (stdout,'(3x,''================================================'')')
     call tim%start(3,'Geometry optimization')
     call checkname_xyz(crefile,atmp,str)
-    call crest_multilevel_wrap(env,trim(atmp),0) 
+    call crest_multilevel_wrap(env,trim(atmp),0,refine_here=.true.) 
     call tim%stop(3)                 
     if(env%iostatus_meta .ne. 0 ) return
 
@@ -264,21 +299,31 @@ end subroutine crest_search_imtdgc
 !>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>><<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<!
 !========================================================================================!
 
-subroutine crest_multilevel_wrap(env,ensnam,level)
+subroutine crest_multilevel_wrap(env,ensnam,level,refine_here)
 !*************************************************
 !* wrapper for the multilevel_oloop to select
 !* only a single optimization level
+!*
+!* refine_here marks this as the FINAL ensemble optimization of the algorithm,
+!* i.e. the one whose energies the user actually sees. See crest_multilevel_oloop.
 !*************************************************
   use crest_parameters, only: wp,stdout,bohr
   use crest_data
   use crest_calculator
   use strucrd
+  !> only: -- a procedure must not have an explicit interface to ITSELF in
+  !> its own scoping unit, and this module declares one for this routine.
+  use multilevel_interface,only:crest_multilevel_oloop
   implicit none
   type(systemdata) :: env
   character(len=*),intent(in) :: ensnam
   integer,intent(in) :: level
+  logical,intent(in),optional :: refine_here
   logical :: multilevel(6)
+  logical :: rh
   integer :: k
+  rh = .false.
+  if (present(refine_here)) rh = refine_here
   multilevel = .false.
   select case(level)
   case( 1: ) !> explicit selection (level is a positie integer)
@@ -290,11 +335,11 @@ subroutine crest_multilevel_wrap(env,ensnam,level)
     k = max(1,k)
     multilevel(k) =.true.
   end select
-  call crest_multilevel_oloop(env,ensnam,multilevel)
+  call crest_multilevel_oloop(env,ensnam,multilevel,refine_here=rh)
 end subroutine crest_multilevel_wrap
 
 !========================================================================================!
-subroutine crest_multilevel_oloop(env,ensnam,multilevel_in)
+subroutine crest_multilevel_oloop(env,ensnam,multilevel_in,refine_here)
 !*******************************************************
 !* multilevel optimization loop.
 !* construct consecutive optimizations starting with
@@ -312,6 +357,11 @@ subroutine crest_multilevel_oloop(env,ensnam,multilevel_in)
   type(systemdata) :: env 
   character(len=*),intent(in) :: ensnam
   logical,intent(in) :: multilevel_in(6)
+  !> .true. only for the FINAL ensemble optimization of an algorithm. Used
+  !> when refinement is restricted to the last stage; see dorefine below.
+  logical,intent(in),optional :: refine_here
+  logical :: rhere,finalonly,dorefine
+  integer :: ilast
   integer :: nat,nall
   real(wp),allocatable :: eread(:)
   real(wp),allocatable :: xyz(:,:,:)
@@ -350,6 +400,43 @@ subroutine crest_multilevel_oloop(env,ensnam,multilevel_in)
     k = optlevmap_alt(env%optlev)
     multilevel(k) = .true.
   endif
+
+!>--- Where does the ensemble refinement run?
+!>
+!>  Default (finalonly = .false.): after EVERY active stage, as CREST has always
+!>  done. That is deliberate. crest_refine overwrites the ensemble energies
+!>  BEFORE sort_and_check, so every intermediate CREGEN cut - which is
+!>  destructive, it deletes structures outside the (widened) energy window - is
+!>  currently made in the RESCORING level's ranking rather than the sampling
+!>  level's. On a system where the sampling method is badly wrong (H-bond
+!>  networks, zwitterions, metals) a conformer that is the true refined global
+!>  minimum can sit far up the sampling-level ranking and would be deleted at
+!>  stage 1 if the cut were made there. Physics first: this stays the default.
+!>
+!>  env%refine_final_only (opt-in) restricts refinement to the last active
+!>  stage of the final ensemble optimization. Measured on a full
+!>  `crest bdo.xyz -gfnff -rsp gfn2 -T 8` run: 8 refinement passes, 3423 GFN2
+!>  singlepoints, 43.6 s, against 4.4 s for all the GFN-FF optimization those
+!>  passes decorate. Only the last pass (231 structures, 3.1 s) sets the
+!>  energies the user sees, because every intermediate crest_oloop overwrites
+!>  eread with sampling-level energies again - so 92.9% of the rescoring time
+!>  only ever influenced intermediate pruning. The trade is the pruning quality
+!>  described above; the switch exists so the user can make it knowingly.
+!>
+!>  A geoopt refinement is forced final-only regardless: at an intermediate
+!>  stage the next stage's crest_oloop simply drags the re-optimized geometries
+!>  back onto the sampling PES, and it would run at that stage's (possibly
+!>  crude) optlev while announcing a re-optimization.
+  rhere = .false.
+  if (present(refine_here)) rhere = refine_here
+  finalonly = env%refine_final_only
+  if (allocated(env%refine_queue)) then
+    if (any(env%refine_queue(:) == refine%geoopt)) finalonly = .true.
+  end if
+  ilast = 0
+  do i = 1,6
+    if (multilevel(i)) ilast = i
+  end do
 
   pr = .false.
   l = count(multilevel)
@@ -405,7 +492,23 @@ subroutine crest_multilevel_oloop(env,ensnam,multilevel_in)
        write(stdout,*)
      !==========================================================!
      !>-- dedicated ensemble refinement step (overwrites inpnam)
-      call  crest_refine(env,trim(inpnam))
+      if (finalonly) then
+        dorefine = rhere .and. (i == ilast)
+      else
+        dorefine = .true.
+      end if
+      if (dorefine) then
+     !>-- A geometry-optimizing refinement must not inherit this stage's
+     !>-- optimization thresholds: stage 1 is optlev = -3 (crude), and running
+     !>-- a crude high-level optimization while printing "re-optimization of
+     !>-- the ensemble" would be a lie. The sorting thresholds (ewin, rthr) are
+     !>-- deliberately NOT restored here - the stage's widened window is what
+     !>-- the following sort_and_check is supposed to use.
+        env%calc%optlev    = optlevelbackup
+        env%calc%hlow_opt  = hlowbackup
+        env%calc%micro_opt = microbackup
+        call  crest_refine(env,trim(inpnam))
+      end if
      !==========================================================!
 
      !>--- CREGEN sorting
@@ -586,6 +689,7 @@ subroutine crest_newcross3(env)
   use crest_data
   use iomod
   use utilities
+  use multilevel_interface
   implicit none
   type(systemdata) :: env  
   real(wp) :: ewinbackup

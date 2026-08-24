@@ -106,10 +106,30 @@ subroutine env2calc(env,calc,molin)
 
     call cal2%autocomplete(2)
 
-    cal2%refine_lvl = refine%singlepoint
+    !> Which refinement the user asked for: -rsp/-refine -> singlepoint,
+    !> -ropt -> a real re-optimization at gfnver2. This used to be hardwired to
+    !> refine%singlepoint, which made -ropt a silent alias of -rsp.
+    cal2%refine_lvl = env%refine_lvl_cli
+    !> The rescoring loop (crest_sploop) discards the gradient, so do not pay
+    !> for it -- but only where xtb actually honours the request. In xtb,
+    !> --sp-nograd is acted on ONLY for g-xTB and only for a plain SCC run
+    !> (src/prog/main.F90: `tblite%method == "gxtb" .and. set%sp_nograd .and.
+    !> set%runtyp == p_run_scc`, and src/tblite/calculator.F90). For GFN1/GFN2
+    !> it merely suppresses --grad, whose analytic gradient is almost free, so
+    !> enabling it there would buy nothing and add a stdout-parsing path for no
+    !> reason. Measured, 50 atoms x 24 structures, 8 threads, g-xTB rescoring:
+    !> 1.310 s -> 0.547 s (2.4x), energies identical to all printed digits.
+    !> A geoopt refinement obviously still needs gradients.
+    if (allocated(cal2%other)) then
+      if (index(cal2%other,'--gxtb') /= 0 .and. &
+      &  (cal2%refine_lvl == refine%singlepoint .or. &
+      &   cal2%refine_lvl == refine%correction)) then
+        cal2%energyonly = .true.
+      end if
+    end if
     call calc%add(cal2)
     if (allocated(env%refine_queue)) deallocate (env%refine_queue)
-    call env%addrefine(refine%singlepoint)
+    call env%addrefine(env%refine_lvl_cli)
   end if
 
   return
@@ -181,6 +201,7 @@ subroutine env_apply_calclevel(env)
   !> LOCAL
   integer :: j
   integer :: s_chrg,s_uhf,s_refine_lvl,s_id
+  integer :: io_lvl
   real(wp) :: s_weight
   logical :: s_active,s_rdwbo,s_rddip,s_rdqat,s_rdgrad,s_apiclean
   character(len=:),allocatable :: s_calcspace,s_solvmodel,s_solvent,s_draco
@@ -216,13 +237,15 @@ subroutine env_apply_calclevel(env)
     !>--- re-create the level. NOTE: create() calls deallocate() first, which
     !>--- also drops the cached %calcfile/%gradfile/%systemcall -- exactly what
     !>--- we want, because those bake in the old binary and scratch paths.
-    call env%calc%calcs(j)%create(trim(env%gfnver))
+    !>--- iostat is passed on purpose: create() is FATAL on an unknown level
+    !>--- string unless the caller says it can recover, and this caller can.
+    call env%calc%calcs(j)%create(trim(env%gfnver),iostat=io_lvl)
 
-    !>--- ROLLBACK GUARD: create()/set_lvl has no case default, so a level
-    !>--- string it does not know (e.g. the legacy composite flags '--gfn2@gff')
-    !>--- leaves id = jobtype%unknown = 0, i.e. a dead calculator. In that case
-    !>--- restore the previous method rather than break the run.
-    if (env%calc%calcs(j)%id == jobtype%unknown) then
+    !>--- ROLLBACK GUARD: a level string create() does not know (e.g. the legacy
+    !>--- composite flags '--gfn2@gff') leaves id = jobtype%unknown = 0, i.e. a
+    !>--- dead calculator. In that case restore the previous method rather than
+    !>--- break the run.
+    if (io_lvl /= 0 .or. env%calc%calcs(j)%id == jobtype%unknown) then
       env%calc%calcs(j)%id = s_id
       if (allocated(s_other)) env%calc%calcs(j)%other = s_other
       if (allocated(s_binary)) env%calc%calcs(j)%binary = s_binary

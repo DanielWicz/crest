@@ -270,6 +270,8 @@ contains   !> MODULE PROCEDURES START HERE
       env%multilevelopt = val
     case ('refine_presort')
       env%refine_presort = val
+    case ('refine_final_only')
+      env%refine_final_only = val
 
     case ('omp_nested')
       env%omp_allow_nested = val

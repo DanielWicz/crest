@@ -31,7 +31,7 @@ module parallel_interface
 !*******************************************************
   implicit none
   interface
-    subroutine crest_sploop(env,nat,nall,at,xyz,eread)
+    subroutine crest_sploop(env,nat,nall,at,xyz,eread,ok)
       use crest_parameters,only:wp,stdout,sep
       use crest_calculator
       use omp_lib
@@ -45,6 +45,7 @@ module parallel_interface
       integer,intent(in)  :: at(nat)
       real(wp),intent(inout) :: eread(nall)
       integer,intent(in) :: nat,nall
+      logical,intent(out),optional :: ok(nall)
     end subroutine crest_sploop
   end interface
 
@@ -75,11 +76,20 @@ end module parallel_interface
 !> Routines for concurrent singlepoint evaluations
 !========================================================================================!
 !========================================================================================!
-subroutine crest_sploop(env,nat,nall,at,xyz,eread)
+subroutine crest_sploop(env,nat,nall,at,xyz,eread,ok)
 !***************************************************************
 !* subroutine crest_sploop
 !* This subroutine performs concurrent singlepoint evaluations
 !* for the given ensemble. Input eread is overwritten
+!*
+!* ok (optional): per-structure success flag. Callers that RANK structures
+!* must pass it. A failed singlepoint writes eread = 0.0 Eh, which is not a
+!* physical energy - it sits ~627*|E| kcal/mol above every real one, so the
+!* structure is silently swept out by the energy window. Tolerable when the
+!* energies are simply REPLACED, but not when they are COMBINED
+!* (refine%correction adds them to the existing values): there a failure
+!* leaves that structure at the SAMPLING level while its competitors sit at
+!* the corrected level, i.e. two Hamiltonians ranked against each other.
 !***************************************************************
   use crest_parameters,only:wp,stdout,sep
   use crest_calculator
@@ -94,7 +104,9 @@ subroutine crest_sploop(env,nat,nall,at,xyz,eread)
   integer,intent(in)  :: at(nat)
   real(wp),intent(inout) :: eread(nall)
   integer,intent(in) :: nat,nall
+  logical,intent(out),optional :: ok(nall)
 
+  logical,allocatable :: oktmp(:)
   type(coord),allocatable :: mols(:)
   integer :: i,j,k,l,io,ich,ich2,c,z,job_id,zcopy
   logical :: pr,wr,ex
@@ -112,6 +124,9 @@ subroutine crest_sploop(env,nat,nall,at,xyz,eread)
 !>--- check if we have any calculation settings allocated
   if (env%calc%ncalculations < 1) then
     write (stdout,*) 'no calculations allocated'
+    !> ok is intent(out): define it on this path too, otherwise the caller is
+    !> left holding an undefined array and would treat every structure as fine.
+    if (present(ok)) ok(:) = .false.
     return
   end if
 
@@ -170,10 +185,11 @@ subroutine crest_sploop(env,nat,nall,at,xyz,eread)
   z = 0  !> counter to perform optimization in right order (1...nall)
   eread(:) = 0.0_wp
   grads(:,:,:) = 0.0_wp
+  allocate (oktmp(nall),source=.false.)
 !>--- loop over ensemble
   !$omp parallel &
   !$omp shared(env,calculations,nat,nall,at,xyz,eread,grads,c,k,z,pr,wr) &
-  !$omp shared(ich,ich2,mols, nested,Tn)
+  !$omp shared(ich,ich2,mols, nested,Tn,oktmp)
   !$omp single
   do i = 1,nall
 
@@ -204,8 +220,10 @@ subroutine crest_sploop(env,nat,nall,at,xyz,eread)
       !>--- successful optimization (io==0)
       c = c+1
       eread(zcopy) = energy
+      oktmp(zcopy) = .true.
     else
       eread(zcopy) = 0.0_wp
+      oktmp(zcopy) = .false.
     end if
     k = k+1
     !>--- print progress
@@ -235,6 +253,8 @@ subroutine crest_sploop(env,nat,nall,at,xyz,eread)
   write (stdout,'(a,a,a)') '> Corresponding to approximately ',trim(adjustl(atmp)), &
   &                       ' per processed structure'
 
+  if (present(ok)) ok(:) = oktmp(:)
+  deallocate (oktmp)
   deallocate (grads)
   call profiler%clear()
   deallocate (calculations)

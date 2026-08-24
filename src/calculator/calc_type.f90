@@ -100,6 +100,13 @@ module calc_type
     logical :: numgrad = .false.      !> run numerical gradient (expensive!)
     real(wp) :: gradstep = 0.0005_wp  !> displacement for numerical gradient
     logical :: rdgrad = .true.
+    !> Energy-only job: the caller has proven it discards the gradient (the
+    !> ensemble rescoring loop, crest_sploop). Deliberately SEPARATE from
+    !> rdgrad, which is a user-facing TOML key with a different meaning
+    !> ("do not read a gradient file"): reusing rdgrad here would turn
+    !> `rdgrad = false` in a user's [calculation.level] block into a silent
+    !> zero-gradient optimization.
+    logical :: energyonly = .false.
     integer :: gradtype = 0
     integer :: gradfmt = 0
     character(len=:),allocatable :: gradkey
@@ -1203,16 +1210,28 @@ contains  !>--- Module routines start here
 
 !=========================================================================================!
 
-  subroutine create_calclevel_shortcut(self,levelstring)
+  subroutine create_calclevel_shortcut(self,levelstring,iostat)
 !*********************************************************************
 !* subroutine create_calclevel_shortcut called with %create(...)
 !* Set up a calculation_settings object for a given level of theory
 !* More shortcuts can be added as required.
 !* Be careful about the intent(out) setting!
+!*
+!* iostat (optional): 0 if the level string was recognised, 1 if not.
+!* If it is NOT passed, an unrecognised level string is FATAL. It used to be
+!* silently ignored: this select case had no default, and because self is
+!* intent(out) the object was left with id = jobtype%unknown, which
+!* potential_core then evaluated as E = 0.0 Eh with a success status. A typo in
+!* `-refine <lvl>` therefore re-ranked an entire ensemble at zero energy while
+!* reporting "100.0% success". Callers that can genuinely recover (see the
+!* rollback guard in env_apply_calclevel, src/legacy_wrappers.f90) pass iostat.
 !*********************************************************************
+    use crest_parameters,only:stderr
     implicit none
     class(calculation_settings),intent(out) :: self
     character(len=*) :: levelstring
+    integer,intent(out),optional :: iostat
+    if (present(iostat)) iostat = 0
     call self%deallocate()
     select case (trim(levelstring))
     case ('gfnff','--gff','--gfnff')
@@ -1245,6 +1264,21 @@ contains  !>--- Module routines start here
 
     case ('generic')
       self%id = jobtype%generic
+
+    case default
+      self%id = jobtype%unknown
+      if (present(iostat)) then
+        iostat = 1
+      else
+        write (stderr,'(/,a,1x,a)') '**ERROR** unknown calculation level', &
+        & "'"//trim(levelstring)//"'"
+        write (stderr,'(a)') '          accepted: gfnff (=gff), gfn0, gfn1, gfn2,'
+        write (stderr,'(a)') '                    gxtb, gxtb_dev, gp3, orca, generic'
+        write (stderr,'(a)') '          (tblite, ceh, gfn0*, turbomole, terachem, lj and libpvol'
+        write (stderr,'(a)') '           are only reachable from a TOML input file)'
+        flush (stderr)
+        error stop 1
+      end if
 
     end select
     call self%autocomplete(self%id)
