@@ -209,6 +209,25 @@ subroutine env_calcdat_specialcases(env)
     do i = 1,env%calc%ncalculations
       refine_lvl = env%calc%calcs(i)%refine_lvl
       if (refine_lvl <= 0) cycle
+
+      !> Energy-only rescoring, same default the CLI route applies in env2calc
+      !> (src/legacy_wrappers.f90). A singlepoint/correction refinement stage
+      !> runs through crest_sploop, which discards the gradient, and for g-xTB
+      !> that gradient is a full analytic CPHF/Z-vector solve. Without this,
+      !> a refinement set up through a TOML [calculation.level] block paid for
+      !> it while the identical run driven from the command line did not.
+      !> Restricted to g-xTB because xtb honours --sp-nograd nowhere else
+      !> (src/prog/main.F90 gates it on method == "gxtb" .and. runtyp scc).
+      if (refine_lvl == refine%singlepoint .or. refine_lvl == refine%correction) then
+        if (env%calc%calcs(i)%id == jobtype%xtbsys) then
+          if (allocated(env%calc%calcs(i)%other)) then
+            if (index(env%calc%calcs(i)%other,'--gxtb') /= 0) then
+              env%calc%calcs(i)%energyonly = .true.
+            end if
+          end if
+        end if
+      end if
+
       if(allocated(env%refine_queue))then
         if (any(env%refine_queue(:) == refine_lvl)) cycle
       endif
