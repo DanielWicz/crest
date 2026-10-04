@@ -493,6 +493,11 @@ CONTAINS
         do l = k,1,-1
           nm = l - 1
           if ((abs(rv1(l)) + anorm) .eq. anorm) goto 2
+          !> rv1(1) is always zero, so the test above ends the search at l=1 for
+          !> any finite input. With non-finite input (anorm = NaN) it never does,
+          !> and the loop used to run on to l=0, writing w(0), rv1(0), a(:,0) and
+          !> v(:,0) outside the arrays (the caller's stack, e.g. the iostatus pointer).
+          if (l .eq. 1) goto 2
           if ((abs(w(nm)) + anorm) .eq. anorm) goto 1
         end do
 1       c = 0.0_dp

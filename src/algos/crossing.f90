@@ -138,6 +138,7 @@ subroutine crossing(nat,nall,at,xyz,er,ewin,rthr,cthr,maxgen)
   use strucrd
   use miscdata, only: rcov
   use crest_cn_module
+  use,intrinsic :: ieee_arithmetic,only:ieee_is_finite
   implicit none
   !> INPUT
   integer,intent(in)  :: nat,nall           !> number of atoms, number of structures
@@ -248,6 +249,12 @@ subroutine crossing(nat,nall,at,xyz,er,ewin,rthr,cthr,maxgen)
         if (zdum(2,m) .lt. 0.001_wp) zdum(2,m) = 0.005_wp
       end do
       call GMETRY(nat,zdum,cdum,na,nb,nc,fail)
+      !>--- a degenerate crossed z-matrix gives non-finite Cartesians: atoms 1 and 2
+      !>    need not be bonded, so the crossed atom-2 "bond" length can come out
+      !>    near zero, and GMETRY then divides 0/0 without setting fail. NaN passes
+      !>    the CN clash test below and rmsd() cannot handle it, so discard such a
+      !>    structure here, counted like any other failed one.
+      if (.not.fail) fail = .not.all(ieee_is_finite(cdum))
       !>--- checks
       if (fail) then
         !$omp atomic
