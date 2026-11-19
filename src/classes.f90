@@ -86,6 +86,7 @@ module crest_data
   integer,parameter,public :: crest_rigcon     = 271
   integer,parameter,public :: crest_trialopt   = 272
   integer,parameter,public :: crest_ensemblesp = 273
+  integer,parameter,public :: crest_gxtbreopt  = 274 !> replay of the -gfnff:gxtb post-sampling stage
 !>> <<!
   integer,parameter,public :: crest_test       = 456
 
@@ -619,6 +620,9 @@ module crest_data
     !> refinement queue contains a geometry optimization.
     logical :: refine_final_only = .false.
     logical :: refine_presort = .false.  !> run CREGEN at the beginning of crest_refine?
+    !> -gfnff:gxtb : GFN-FF sampling, then gas-phase g-xTB re-optimization of the final ensemble
+    logical :: gfnff_gxtb = .false.
+    character(len=:),allocatable :: gxtb_optlevel !> xtb optimization level word of that re-optimization
     logical :: refine_esort   = .false.  !> if CREGEN is run after crest_refine, only sort energy?
     logical :: sameRandomNumber = .false. !> QCG related, choose same random number for iff
     logical :: scallen               !> scale the automatically determined MD length by some factor?

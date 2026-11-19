@@ -24,7 +24,8 @@ program CREST
 !  use iso_fortran_env,wp => real64
   use crest_parameters !> Datatypes and constants
   use crest_data !> module for the main data storage (imports systemdata and timer)
-  use crest_restartlog 
+  use crest_restartlog
+  use gfnff_gxtb_module,only:crest_gxtb_replay
     USE, INTRINSIC :: IEEE_EXCEPTIONS
   implicit none
   type(systemdata) :: env  !> MAIN STORAGE OF SYSTEM DATA
@@ -291,6 +292,9 @@ program CREST
 
   case (crest_ensemblesp) !> singlepoints along ensemble
     call crest_ensemble_singlepoints(env,tim)    
+
+  case (crest_gxtbreopt) !> replay of the -gfnff:gxtb post-sampling stage
+    call crest_gxtb_replay(env,tim)
 
   case(crest_protonate)
     call protonate(env,tim)

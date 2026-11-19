@@ -22,6 +22,8 @@ srcs += files(
   'playground.f90',
   'crossing.f90',
   'refine.f90',
+  'gxtb_reopt.f90',
+  'gfnff_gxtb.f90',
   'scan.f90',
   'search_1.f90',
   'search_mecp.f90',

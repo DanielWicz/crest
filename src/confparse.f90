@@ -48,6 +48,7 @@ subroutine parseflags(env,arg,nra)
   use parse_inputfile
   use crest_restartlog
   use lwoniom_module
+  use gxtb_reopt_module,only:gxtb_level_is_valid
   implicit none
   type(systemdata),intent(inout) :: env
   integer,intent(in) :: nra
@@ -392,6 +393,20 @@ subroutine parseflags(env,arg,nra)
         end if
         call xyz2coord(env%ensemblename,'coord') !> write coord from lowest structure
         env%inputcoords = env%ensemblename !> just for a printout
+        exit
+
+      case ('-gxtbreopt') !> replay of the -gfnff:gxtb post-sampling stage
+        env%crestver = crest_gxtbreopt
+        env%preopt = .false.
+        env%gfnff_gxtb = .true.
+        env%ensemblename = 'none selected'
+        atmp = ''
+        if (nra .ge. (i+1)) atmp = adjustl(arg(i+1))
+        if ((atmp(1:1) /= '-').and.(len_trim(atmp) .ge. 1)) then
+          env%ensemblename = trim(atmp)
+        end if
+        !> NOTE: coord is NOT written from the ensemble. The input structure
+        !> (first argument) is the topology reference of the final CREGEN.
         exit
 
       case ('-screen')  !> SCREEN
@@ -1095,7 +1110,7 @@ subroutine parseflags(env,arg,nra)
       case ('-opt','-optlev')             !> settings for optimization level of GFN-xTB
         env%optlev = optlevnum(arg(i+1))
         write (*,'(2x,a,1x,a)') trim(arg(i)),optlevflag(env%optlev)
-      case ('-gfn','-gfn1','-gfn2','-gfn0','-gff','-gfnff')
+      case ('-gfn','-gfn1','-gfn2','-gfn0','-gff','-gfnff','-gfnff:gxtb','-gff:gxtb')
         ctmp = argument
         if (argument == '-gfn') then
           dtmp = trim(arg(i+1))
@@ -1114,7 +1129,7 @@ subroutine parseflags(env,arg,nra)
         case ('-gfn0')
           env%gfnver = '--gfn0'
           write (*,'(2x,a,'' : Use of GFN0-xTB requested.'')') env%gfnver
-        case ('-gff','-gfnff')
+        case ('-gff','-gfnff','-gfnff:gxtb','-gff:gxtb')
           env%gfnver = '--gff'
           write (*,'(2x,a,'' : Use of GFN-FF requested.'')') '--gfnff'
           env%mdstep = 1.5d0
@@ -1125,6 +1140,19 @@ subroutine parseflags(env,arg,nra)
           end if
           env%cts%cbonds_md = .true.
           env%checkiso = .true.
+          !> -gfnff:gxtb = exactly the -gff sampler (above) + g-xTB gas-phase
+          !> re-optimization of the final ensemble. The level word is optional.
+          if (index(ctmp,':gxtb') > 0) then
+            env%gfnff_gxtb = .true.
+            env%legacy = .false.
+            if (.not.allocated(env%gxtb_optlevel)) env%gxtb_optlevel = 'tight'
+            if (i < nra) then
+              atmp = adjustl(arg(i+1))
+              if (gxtb_level_is_valid(trim(atmp))) env%gxtb_optlevel = trim(atmp)
+            end if
+            write (*,'(2x,a,a,a)') trim(argument),' : g-xTB gas-phase re-optimization, level ', &
+            & env%gxtb_optlevel
+          end if
         case ('stereoisomers')
           env%gfnver = '--gff'
         case default
@@ -2452,6 +2480,53 @@ subroutine parseflags(env,arg,nra)
       & 'is only implemented in the new (CREST >3.0) routines,'
       write (stdout,'(a)') '> which are selected automatically for this runtype (as with -newversion)'
       env%legacy = .false.
+    end if
+  end if
+
+!>--- -gfnff:gxtb / --gxtbreopt: settings and guards (all arguments are parsed now)
+  if (env%gfnff_gxtb.or.env%crestver == crest_gxtbreopt) then
+    env%gfnff_gxtb = .true.
+    env%legacy = .false.
+    if (.not.allocated(env%gxtb_optlevel)) env%gxtb_optlevel = 'tight'
+    if (env%crestver == crest_gxtbreopt) then
+      !> replay: same CREGEN-relevant sampler settings as -gff, no sampling
+      env%gfnver = '--gff'
+      env%mdstep = 1.5d0
+      env%hmass = 5.0d0
+      env%checkiso = .true.
+      env%trackorigin = .true. !> as in the full search, so that the rotamer file is identical, too
+    end if
+    do i = 1,nra
+      select case (trim(arg(i)))
+      case ('-rsp','--rsp','-ropt','--ropt','-refine','--refine')
+        write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb does not combine with '//trim(arg(i))// &
+        & ' (the g-xTB re-optimization replaces the refinement).'
+        flush (stderr)
+        error stop 1
+      case ('-alpb','--alpb','-gbsa','--gbsa','-g','-cpcm','--cpcm','-draco','--draco')
+        write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb is a gas-phase protocol; implicit solvation is not allowed'
+        flush (stderr)
+        error stop 1
+      case ('-cinp','--cinp','-cfile','--cfile','-C','-c')
+        write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb does not support a user constraint file (-cinp)'
+        flush (stderr)
+        error stop 1
+      end select
+    end do
+    if (allocated(env%refine_queue)) then
+      write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb does not combine with a refinement queue (-rsp/-ropt/-refine).'
+      flush (stderr)
+      error stop 1
+    end if
+    if (env%gbsa.or.allocated(env%draco)) then
+      write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb is a gas-phase protocol; implicit solvation is not allowed'
+      flush (stderr)
+      error stop 1
+    end if
+    if (env%cts%used) then
+      write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb does not support a user constraint file (-cinp)'
+      flush (stderr)
+      error stop 1
     end if
   end if
 

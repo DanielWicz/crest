@@ -169,6 +169,36 @@ resulting ensemble with a better one.
 
   Example: `crest struc.xyz -gfnff -rsp gfn2`
 
+*-gfnff:gxtb* [_level_], *-gff:gxtb* [_level_]::
+  Sample with GFN-FF (exactly as *-gfnff*), then re-optimize the deduplicated
+  final ensemble in the **gas phase** with g-xTB, followed by the usual final
+  CREGEN. The unique GFN-FF conformers (CREGEN at GFN-FF energies) are
+  re-optimized with one native `xtb --gxtb --opt` call per structure,
+  unconstrained, in parallel single-thread jobs (*-T* of them), in a
+  deterministic order: the result does not depend on the thread count.
+  The xtb binary (with g-xTB) is selected with *-xnam*.
+  _level_ is optional, one of **crude**, **sloppy**, **loose**, **lax**,
+  **normal**, **tight** [_default_], **vtight**, **extreme**.
+  Implicit solvation (*-alpb*, *-gbsa*, ...), a constraint file (*-cinp*) and
+  *-rsp*/*-ropt*/*-refine* are errors in this mode. A structure whose
+  optimization does not converge gets the energy +1.0 Eh, is counted in the
+  stage summary and dropped by the final CREGEN.
++
+  Output: the final ensemble as usual (_crest_conformers.xyz_,
+  _crest_rotamers.xyz_, _crest_best.xyz_, _crest.energies_), plus
+  _crest_gfnff_ensemble.xyz_, the GFN-FF ensemble that is the stored input of
+  the g-xTB stage.
+
+*--gxtbreopt* _crest_gfnff_ensemble.xyz_::
+  Replay only the post-sampling stage (presort, g-xTB re-optimization, final
+  CREGEN) on a stored _crest_gfnff_ensemble.xyz. The first argument is the
+  input structure (topology reference), as in a normal run. Implies
+  *-gfnff:gxtb*; give *-chrg*, *-uhf*, *-T*, *-xnam* as for the full run. With
+  the ensemble and input of a full run, _crest_conformers.xyz_ is identical to
+  that of the full run, for any *-T*.
+
+  Example: `crest struc.xyz -gfnff:gxtb tight -T 8 -xnam /path/to/xtb`
+
 *Adding additional constraints to the calculations:*
 
 The user is able to include additional constraints to **ALL** xtb**(1)** calculations that are conducted by CREST.

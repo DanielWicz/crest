@@ -24,6 +24,8 @@ list(APPEND srcs
   "${dir}/playground.f90"
   "${dir}/crossing.f90"
   "${dir}/refine.f90"
+  "${dir}/gxtb_reopt.f90"
+  "${dir}/gfnff_gxtb.f90"
   "${dir}/scan.f90" 
   "${dir}/search_1.f90"
   "${dir}/search_mecp.f90"

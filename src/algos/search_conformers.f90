@@ -353,6 +353,7 @@ subroutine crest_multilevel_oloop(env,ensnam,multilevel_in,refine_here)
   use utilities
   use crest_restartlog
   use parallel_interface
+  use gfnff_gxtb_module,only:crest_gfnff_gxtb_stage
   implicit none
   type(systemdata) :: env 
   character(len=*),intent(in) :: ensnam
@@ -492,7 +493,15 @@ subroutine crest_multilevel_oloop(env,ensnam,multilevel_in,refine_here)
        write(stdout,*)
      !==========================================================!
      !>-- dedicated ensemble refinement step (overwrites inpnam)
-      if (finalonly) then
+      if (env%gfnff_gxtb) then
+     !>-- -gfnff:gxtb: the g-xTB gas-phase re-optimization replaces the
+     !>-- refinement; it only ever runs on the final ensemble optimization.
+        dorefine = .false.
+        if (rhere .and. (i == ilast)) then
+          call crest_gfnff_gxtb_stage(env,trim(inpnam))
+          if (env%iostatus_meta .ne. 0) return
+        end if
+      else if (finalonly) then
         dorefine = rhere .and. (i == ilast)
       else
         dorefine = .true.
