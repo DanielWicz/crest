@@ -50,6 +50,10 @@ module gfnff_gxtb_module
   integer,save :: nstage_runs = 0
   character(len=*),parameter :: failure_marker = 'CREST_GXTB_FAILED'
 
+  !> set when THIS run is about to write (or clear) crest_conformers.xyz and the
+  !> other result files; only then may a failure remove them (never in -nocregen)
+  logical,save :: run_writes_results = .false.
+
 contains
 !================================================================================!
 
@@ -90,6 +94,7 @@ contains
     call rdensembleparam(ensemble_file,nat,nin)
 
     !>--- 2. presort: CREGEN at GFN-FF energies, unique conformers only
+    run_writes_results = .true.
     call smallhead('g-xTB gas-phase re-optimization (GFN-FF sampling)')
     call newcregen(env,0,ensemble_file)
     call rename('crest_ensemble.xyz',ensemble_file)
@@ -198,6 +203,7 @@ contains
     write (stdout,'(1x,a,a)') 'Ensemble: ',trim(env%ensemblename)
 
     !>--- clean start: previous results must not influence this run
+    run_writes_results = .true.
     call rmcres()
     call checkname_xyz(crefile,inpnam,outnam)
     call execute_command_line("cp -f '"//trim(env%ensemblename)//"' '"//trim(outnam)//"'",exitstat=io,cmdstat=cs,cmdmsg=msg)
@@ -338,13 +344,15 @@ contains
     !> could be mistaken for final results (exact names) and leave a marker.
     character(len=*),intent(in) :: reason
     integer :: ich
-    call remove('crest_conformers.xyz')
-    call remove('crest_rotamers.xyz')
-    call remove('crest_best.xyz')
-    call remove('crest.energies')
+    !> only files of this run: a caller's crest_conformers.xyz etc. must survive
+    if (run_writes_results) then
+      call rmcres()   !> crest_conformers.xyz and crest_rotamers*.xyz (this run's working copies)
+      call remove('crest_best.xyz')
+      call remove('crest.energies')
+    end if
     open (newunit=ich,file=failure_marker,status='replace')
     write (ich,'(a)') 'The -gfnff:gxtb / --gxtbreopt workflow FAILED: '//trim(reason)
-    write (ich,'(a)') 'Result files of the GFN-FF stage were removed; nothing in this directory is a g-xTB result.'
+    write (ich,'(a)') 'Result files written by this run at the GFN-FF level were removed; this run produced no g-xTB result.'
     close (ich)
     write (stderr,'(a)') '**ERROR** gxtb workflow failed ('//trim(reason)//'); see '//failure_marker
   end subroutine gxtb_flag_failure

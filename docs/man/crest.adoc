@@ -206,6 +206,22 @@ resulting ensemble with a better one.
   the ensemble and input of a full run, _crest_conformers.xyz_ is identical to
   that of the full run, for any *-T*.
 
+*-nocregen*::
+  Only together with *--gxtbreopt* (an error otherwise). No CREGEN of any kind:
+  no presort, no energy window, no merging, no topology filter. Every structure
+  of the given file, in file order, is re-optimized, and
+  _crest_gxtb_reopt.xyz_ is written (atomically, exit status 0 once it is
+  written, also if structures failed): one block per input structure with the
+  comment line `index=<k> ok=<1|0> energy=<E> gnorm=<g> topo=<1|0|nan> level=<lvl>`.
+  Energy, gnorm and the coordinates are copied verbatim from xtb's xtbopt.xyz.
+  A failed structure has `ok=0 energy=nan gnorm=nan topo=nan` and its input
+  geometry. *topo* compares the connectivity (neighbour lists, as CREGEN's
+  topology check) with the input structure only; it does **not** detect E/Z or
+  other stereochemical changes, so the caller applies its own structural and
+  stereo checks. _crest_gxtb_populations.dat is not written in this mode.
+  The weights in _crest_gxtb_populations.dat (other modes) are computed from
+  the 8-decimal energies of _crest_conformers.xyz.
+
   Example: `crest struc.xyz -gfnff:gxtb tight -T 8 -xnam /path/to/xtb`
 
 *Adding additional constraints to the calculations:*
