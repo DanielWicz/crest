@@ -53,6 +53,8 @@ module gxtb_reopt_module
     integer :: njobs = 1                      !> parallel single-thread jobs
     logical :: keep = .false.                 !> keep scratch directories
     logical :: ready = .false.
+    logical :: ran = .false.                  !> reoptimize has completed ...
+    integer :: ran_nat = 0,ran_nall = 0       !> ... for these dimensions
     integer,allocatable :: failed(:)          !> 1-based indices of failed structures
   contains
     procedure,public :: init => reopt_init
@@ -87,6 +89,7 @@ contains
     logical,intent(out) :: ok
     ok = .false.
     self%ready = .false.
+    self%ran = .false.
     if (len_trim(binary) < 1 .or. len_trim(scratch) < 1) return
     if (.not.gxtb_level_is_valid(level)) return
     if (njobs < 1 .or. uhf < 0) return
@@ -115,16 +118,18 @@ contains
     real(wp),intent(inout) :: xyz_ang(3,nat,nall)
     real(wp),intent(out) :: energies(nall)
     logical,intent(out) :: ok(nall)
-    integer :: k,nj,io
+    integer :: k,nj,io,cs
+    character(len=256) :: msg
     logical :: good
     integer :: nfail
     ok = .false.
+    self%ran = .false.
     energies = gxtb_efail
     if (allocated(self%failed)) deallocate (self%failed)
     allocate (self%failed(0))
     if (.not.self%ready .or. nall < 1) return
-    call execute_command_line("mkdir -p '"//self%scratch//"'",exitstat=io)
-    if (io /= 0) return
+    call execute_command_line("mkdir -p '"//self%scratch//"'",exitstat=io,cmdstat=cs,cmdmsg=msg)
+    if (io /= 0 .or. cs /= 0) return
     nj = max(1,min(self%njobs,nall))
 !$omp parallel do num_threads(nj) schedule(dynamic,1) default(shared) private(k,good)
     do k = 1,nall
@@ -142,6 +147,9 @@ contains
         self%failed(nfail) = k
       end if
     end do
+    self%ran = .true.
+    self%ran_nat = nat
+    self%ran_nall = nall
   end subroutine reopt_run
 
 !================================================================================!
@@ -150,14 +158,15 @@ contains
     !> Remove the scratch directories (exact path), unless they are to be kept.
     !> Separate from reoptimize: the results files are still needed afterwards.
     class(gxtb_reoptimizer),intent(inout) :: self
-    integer :: io
+    integer :: io,cs
+    character(len=256) :: msg
     if (.not.self%ready .or. self%keep) return
-    call execute_command_line("rm -rf '"//self%scratch//"'",exitstat=io)
+    call execute_command_line("rm -rf '"//self%scratch//"'",exitstat=io,cmdstat=cs,cmdmsg=msg)
   end subroutine reopt_cleanup
 
 !================================================================================!
 
-  subroutine reopt_write_results(self,fname,nat,nall,ok,written)
+  subroutine reopt_write_results(self,fname,nat,nall,ok,topo,written)
     !> Write one block per input index (input order) to fname, atomically.
     !> Success: xtb's energy/gnorm text and coordinate lines are copied
     !> verbatim from xtbopt.xyz (no float re-formatting). Failure: energy=nan,
@@ -167,13 +176,16 @@ contains
     character(len=*),intent(in) :: fname
     integer,intent(in) :: nat,nall
     logical,intent(in) :: ok(nall)
+    integer,intent(in) :: topo(nall)   !> 1 same connectivity as the reference, 0 not (used only if ok)
     logical,intent(out) :: written
     integer :: och,ich,k,j,io,p
-    character(len=:),allocatable :: dir,tmpname,etxt,gtxt
+    character(len=:),allocatable :: dir,tmpname,etxt,gtxt,ttxt
     character(len=512) :: line
     character(len=16) :: ctmp
     written = .false.
-    if (.not.self%ready .or. nall < 1) return
+    !> refuse unless reoptimize has run for exactly these dimensions
+    if (.not.self%ready .or. .not.self%ran) return
+    if (nall /= self%ran_nall .or. nat /= self%ran_nat .or. nall < 1) return
     tmpname = trim(fname)//'.tmp'
     open (newunit=och,file=tmpname,status='replace',iostat=io)
     if (io /= 0) return
@@ -182,6 +194,7 @@ contains
       dir = self%scratch//'/s'//trim(ctmp)
       etxt = 'nan'
       gtxt = 'nan'
+      ttxt = 'nan'
       if (ok(k)) then
         open (newunit=ich,file=dir//'/xtbopt.xyz',status='old',iostat=io)
       else
@@ -196,6 +209,7 @@ contains
       if (ok(k)) then
         etxt = token_after(line,'energy:')
         gtxt = token_after(line,'gnorm:')
+        ttxt = merge('1','0',topo(k) == 1)
         if (len(etxt) < 1 .or. len(gtxt) < 1) then
           close (ich)
           close (och,status='delete')
@@ -204,7 +218,7 @@ contains
       end if
       write (och,'(i0)') nat
       write (och,'(a,i0,a,i0,a)') 'index=',k,' ok=',merge(1,0,ok(k)),' energy='//etxt// &
-      & ' gnorm='//gtxt//' level='//self%level
+      & ' gnorm='//gtxt//' topo='//ttxt//' level='//self%level
       do j = 1,nat
         read (ich,'(a)',iostat=io) line
         if (io /= 0) then
@@ -255,15 +269,16 @@ contains
     character(len=:),allocatable :: dir,cmd
     character(len=16) :: ctmp
     character(len=32) :: qstr,ustr
-    integer :: io,stat,ich,j
+    integer :: io,stat,ich,j,cs
+    character(len=256) :: msg
     logical :: ex
     real(wp) :: xnew(3,nat),enew
     energy = gxtb_efail
     good = .false.
     write (ctmp,'(i0)') k
     dir = self%scratch//'/s'//trim(ctmp)
-    call execute_command_line("rm -rf '"//dir//"' && mkdir -p '"//dir//"'",exitstat=io)
-    if (io /= 0) return
+    call execute_command_line("rm -rf '"//dir//"' && mkdir -p '"//dir//"'",exitstat=io,cmdstat=cs,cmdmsg=msg)
+    if (io /= 0 .or. cs /= 0) return
     !> input structure, Angstrom, full CREST precision
     open (newunit=ich,file=dir//'/xtbinp.xyz',status='replace',iostat=io)
     if (io /= 0) return
@@ -278,8 +293,8 @@ contains
     cmd = "cd '"//dir//"' && OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 '"// &
     & self%binary//"' xtbinp.xyz --gxtb --chrg "//trim(qstr)//" --uhf "//trim(ustr)// &
     & " --opt "//self%level//" > xtb.out 2> xtb.err"
-    call execute_command_line(cmd,exitstat=stat)
-    if (stat /= 0) return
+    call execute_command_line(cmd,exitstat=stat,cmdstat=cs,cmdmsg=msg)
+    if (stat /= 0 .or. cs /= 0) return
     inquire (file=dir//'/.xtboptok',exist=ex)
     if (.not.ex) return
     !> xtb 6.7.1 writes .xtboptok and exits 0 even when it stops at the cycle

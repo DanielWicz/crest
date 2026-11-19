@@ -23,19 +23,24 @@
 !> energies, ready for the final CREGEN. The full search and the replay use
 !> the very same routine, so they cannot drift apart.
 module gfnff_gxtb_module
-  use crest_parameters,only:wp,stdout,stderr
+  use crest_parameters,only:wp,stdout,stderr,autokcal,bohr
   use crest_data
   use strucrd
   use iomod
   use utilities
   use cregen_interface
   use gxtb_reopt_module
+  use miscdata,only:rcov
+  use crest_cn_module
   implicit none
   private
 
   public :: crest_gfnff_gxtb_stage
   public :: crest_gxtb_replay
   public :: gfnff_gxtb_stage_count
+  public :: gxtb_flag_failure
+  public :: gxtb_clear_failure_marker
+  public :: gxtb_write_populations
 
   !> the stored input of the post-sampling stage (GFN-FF energies)
   character(len=*),parameter :: stored_ensemble = 'crest_gfnff_ensemble.xyz'
@@ -43,6 +48,7 @@ module gfnff_gxtb_module
   !> how often the stage was entered in this program run (queried by crest_main,
   !> which insists on exactly one run for every -gfnff:gxtb workflow)
   integer,save :: nstage_runs = 0
+  character(len=*),parameter :: failure_marker = 'CREST_GXTB_FAILED'
 
 contains
 !================================================================================!
@@ -70,11 +76,13 @@ contains
     character(len=512) :: cdir
     character(len=64) :: comment
     integer,allocatable :: idx(:)
+    integer :: cs,gs
+    character(len=256) :: msg
 
     nstage_runs = nstage_runs+1
     !>--- 1. keep the GFN-FF ensemble as the stored input of this stage
-    call execute_command_line("cp -f '"//ensemble_file//"' '"//stored_ensemble//"'",exitstat=io)
-    if (io /= 0) then
+    call execute_command_line("cp -f '"//ensemble_file//"' '"//stored_ensemble//"'",exitstat=io,cmdstat=cs,cmdmsg=msg)
+    if (io /= 0 .or. cs /= 0) then
       write (stderr,'(a)') '**ERROR** could not store '//stored_ensemble
       env%iostatus_meta = status_failed
       return
@@ -96,8 +104,13 @@ contains
     call rdensemble(ensemble_file,nat,nall,at,xyz,eread)
 
     !>--- 3. g-xTB re-optimization, T parallel single-thread jobs
-    call getcwd(cdir)
+    call getcwd(cdir,gs)
     cwd = trim(cdir)
+    if (gs /= 0) then
+      write (stderr,'(a)') '**ERROR** cannot determine the working directory.'
+      env%iostatus_meta = status_failed
+      return
+    end if
     call reopt%init(trim(env%ProgName),env%chrg,env%uhf,env%gxtb_optlevel,max(1,env%threads), &
     &    cwd//'/.gxtb_reopt',env%keepModef,good)
     if (.not.good) then
@@ -156,7 +169,8 @@ contains
     type(systemdata),intent(inout) :: env
     type(timer),intent(inout) :: tim
     character(len=128) :: inpnam,outnam
-    integer :: nat,nall,io
+    integer :: nat,nall,io,cs
+    character(len=256) :: msg
     logical :: ex
 
     call tim%start(14,'g-xTB re-optimization')
@@ -186,8 +200,8 @@ contains
     !>--- clean start: previous results must not influence this run
     call rmcres()
     call checkname_xyz(crefile,inpnam,outnam)
-    call execute_command_line("cp -f '"//trim(env%ensemblename)//"' '"//trim(outnam)//"'",exitstat=io)
-    if (io /= 0) then
+    call execute_command_line("cp -f '"//trim(env%ensemblename)//"' '"//trim(outnam)//"'",exitstat=io,cmdstat=cs,cmdmsg=msg)
+    if (io /= 0 .or. cs /= 0) then
       env%iostatus_meta = status_failed
       return
     end if
@@ -216,8 +230,9 @@ contains
     integer,allocatable :: at(:),idx(:)
     real(wp),allocatable :: xyz(:,:,:),eread(:)
     logical,allocatable :: ok(:)
+    integer,allocatable :: topo(:)
     logical :: good,written
-    integer :: t0,t1,rate,k
+    integer :: t0,t1,rate,k,gs
     character(len=512) :: cdir
     character(len=:),allocatable :: cwd,line
     character(len=32) :: ctmp
@@ -227,8 +242,13 @@ contains
     nall = nall_in
     call rdensemble(env%ensemblename,nat,nall,at,xyz,eread)
     allocate (ok(nall))
-    call getcwd(cdir)
+    call getcwd(cdir,gs)
     cwd = trim(cdir)
+    if (gs /= 0) then
+      write (stderr,'(a)') '**ERROR** cannot determine the working directory.'
+      env%iostatus_meta = status_failed
+      return
+    end if
     call reopt%init(trim(env%ProgName),env%chrg,env%uhf,env%gxtb_optlevel,max(1,env%threads), &
     &    cwd//'/.gxtb_reopt',env%keepModef,good)
     if (.not.good) then
@@ -240,7 +260,9 @@ contains
     call system_clock(t0,rate)
     call reopt%reoptimize(nat,nall,at,xyz,eread,ok)
     call system_clock(t1)
-    call reopt%write_results(outfile,nat,nall,ok,written)
+    allocate (topo(nall))
+    call connectivity_flags(env,nat,nall,at,xyz,ok,topo)
+    call reopt%write_results(outfile,nat,nall,ok,topo,written)
     call reopt%cleanup()
     idx = reopt%failed_indices()
     write (stdout,'(3x,a,i0)') 'structures in the input file      : ',nall
@@ -262,5 +284,114 @@ contains
       env%iostatus_meta = status_failed
     end if
   end subroutine reoptimize_given_structures
+
+!================================================================================!
+
+  subroutine connectivity_flags(env,nat,nall,at,xyz_ang,ok,topo)
+    !> topo(k) = 1 if structure k has the same connectivity as the reference
+    !> structure ("coord", i.e. the input structure) by the criterion of
+    !> CREGEN's topology check (cregen_topocheck: calc_ncoord + bondtotopo,
+    !> same neighbour-list comparison), 0 if not. Failed structures get -1.
+    type(systemdata),intent(in) :: env
+    integer,intent(in) :: nat,nall
+    integer,intent(in) :: at(nat)
+    real(wp),intent(in) :: xyz_ang(3,nat,nall)
+    logical,intent(in) :: ok(nall)
+    integer,intent(out) :: topo(nall)
+    integer :: j,ntopo
+    integer,allocatable :: atdum(:),toporef(:),topoj(:)
+    real(wp),allocatable :: cref(:,:),c1(:,:),cn(:),bond(:,:)
+    logical,allocatable :: neighmat(:,:)
+    topo = -1
+    ntopo = nat*(nat+1)/2
+    allocate (cref(3,nat),atdum(nat),c1(3,nat),cn(nat),bond(nat,nat))
+    allocate (toporef(ntopo),topoj(ntopo),neighmat(nat,nat))
+    neighmat = .false.
+    call rdcoord('coord',nat,atdum,cref)
+    cn = 0.0_wp
+    bond = 0.0_wp
+    call calc_ncoord(nat,atdum,cref,rcov,cn,400.0_wp,bond)
+    if (allocated(env%excludeTOPO)) then
+      call bondtotopo_excl(nat,at,bond,cn,ntopo,toporef,neighmat,env%excludeTOPO)
+    else
+      call bondtotopo(nat,at,bond,cn,ntopo,toporef,neighmat)
+    end if
+    do j = 1,nall
+      if (.not.ok(j)) cycle
+      c1(:,:) = xyz_ang(:,:,j)/bohr
+      cn = 0.0_wp
+      bond = 0.0_wp
+      call calc_ncoord(nat,at,c1,rcov,cn,400.0_wp,bond)
+      if (allocated(env%excludeTOPO)) then
+        call bondtotopo_excl(nat,at,bond,cn,ntopo,topoj,neighmat,env%excludeTOPO)
+      else
+        call bondtotopo(nat,at,bond,cn,ntopo,topoj,neighmat)
+      end if
+      topo(j) = merge(1,0,all(toporef == topoj))
+    end do
+  end subroutine connectivity_flags
+
+!================================================================================!
+
+  subroutine gxtb_flag_failure(reason)
+    !> A -gfnff:gxtb workflow failed: remove the GFN-FF-level result files that
+    !> could be mistaken for final results (exact names) and leave a marker.
+    character(len=*),intent(in) :: reason
+    integer :: ich
+    call remove('crest_conformers.xyz')
+    call remove('crest_rotamers.xyz')
+    call remove('crest_best.xyz')
+    call remove('crest.energies')
+    open (newunit=ich,file=failure_marker,status='replace')
+    write (ich,'(a)') 'The -gfnff:gxtb / --gxtbreopt workflow FAILED: '//trim(reason)
+    write (ich,'(a)') 'Result files of the GFN-FF stage were removed; nothing in this directory is a g-xTB result.'
+    close (ich)
+    write (stderr,'(a)') '**ERROR** gxtb workflow failed ('//trim(reason)//'); see '//failure_marker
+  end subroutine gxtb_flag_failure
+
+  subroutine gxtb_clear_failure_marker()
+    call remove(failure_marker)
+  end subroutine gxtb_clear_failure_marker
+
+!================================================================================!
+
+  subroutine gxtb_write_populations(env)
+    !> Plain Boltzmann populations of the conformers in crest_conformers.xyz
+    !> (no rotamer degeneracy), to crest_gxtb_populations.dat and stdout.
+    type(systemdata),intent(in) :: env
+    character(len=*),parameter :: pfile = 'crest_gxtb_populations.dat'
+    real(wp),parameter :: kb = 3.166811563e-6_wp   !> Eh/K
+    integer :: nat,nall,i,ich,io
+    integer,allocatable :: at(:)
+    real(wp),allocatable :: xyz(:,:,:),e(:),w(:)
+    real(wp) :: kt,s
+    logical :: ex
+    inquire (file=conformerfile,exist=ex)
+    if (.not.ex) return
+    call rdensembleparam(conformerfile,nat,nall)
+    if (nall < 1) return
+    call rdensemble(conformerfile,nat,nall,at,xyz,e)
+    kt = kb*env%tboltz
+    allocate (w(nall))
+    w = exp(-(e-e(1))/kt)
+    s = sum(w)
+    w = w/s
+    open (newunit=ich,file=pfile,status='replace',iostat=io)
+    if (io /= 0) return
+    call table(ich)
+    close (ich)
+    call table(stdout)
+  contains
+    subroutine table(ch)
+      integer,intent(in) :: ch
+      write (ch,'(a)') '# g-xTB conformer populations: plain Boltzmann weights, NO rotamer degeneracy.'
+      write (ch,'(a,es22.15,a,f8.3,a)') '# kB = ',kb,' Eh/K, T = ',env%tboltz,' K; Erel in kcal/mol'
+      write (ch,'(a)') '# (CREGEN populations sum rotamer weights and use a rounded kT; they are not these.)'
+      write (ch,'(a)') '# index   E(Eh)               Erel(kcal/mol)    weight'
+      do i = 1,nall
+        write (ch,'(i6,2x,f18.8,2x,f12.6,2x,es24.16)') i,e(i),(e(i)-e(1))*autokcal,w(i)
+      end do
+    end subroutine table
+  end subroutine gxtb_write_populations
 
 end module gfnff_gxtb_module

@@ -25,11 +25,13 @@ program CREST
   use crest_parameters !> Datatypes and constants
   use crest_data !> module for the main data storage (imports systemdata and timer)
   use crest_restartlog
-  use gfnff_gxtb_module,only:crest_gxtb_replay,gfnff_gxtb_stage_count
+  use gfnff_gxtb_module,only:crest_gxtb_replay,gfnff_gxtb_stage_count,gxtb_flag_failure, &
+  &   gxtb_clear_failure_marker,gxtb_write_populations
     USE, INTRINSIC :: IEEE_EXCEPTIONS
   implicit none
   type(systemdata) :: env  !> MAIN STORAGE OF SYSTEM DATA
   type(timer)   :: tim     !> timer object
+  character(len=200) :: gxtbmsg
 
   integer :: i,j,l,args,io
   character(len=:),allocatable :: arg(:)
@@ -319,6 +321,16 @@ program CREST
     & gfnff_gxtb_stage_count(),' time(s), expected exactly once. The results are NOT g-xTB energies.'
     flush (stderr)
     if (env%iostatus_meta == 0) env%iostatus_meta = status_failed
+  end if
+  if (env%gfnff_gxtb) then
+    if (env%iostatus_meta /= 0) then
+      write (gxtbmsg,'(a,i0,a,i0,a)') 'exit status ',env%iostatus_meta,', g-xTB stage runs: ', &
+      & gfnff_gxtb_stage_count(),' (expected 1)'
+      call gxtb_flag_failure(trim(gxtbmsg))
+    else
+      call gxtb_clear_failure_marker()
+      if (.not.env%gxtb_nocregen) call gxtb_write_populations(env)
+    end if
   end if
 
   if (env%outputsdf.or.env%sdfformat) then

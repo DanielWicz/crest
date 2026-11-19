@@ -189,6 +189,15 @@ resulting ensemble with a better one.
   _crest_gfnff_ensemble.xyz_, the GFN-FF ensemble that is the stored input of
   the g-xTB stage.
 
+  Populations: _crest_gxtb_populations.dat_ (also printed) lists the plain
+  Boltzmann weights of the conformers in _crest_conformers.xyz_ at the *-T*emperature
+  of CREGEN (298.15 K), kB = 3.166811563e-6 Eh/K, **without** rotamer degeneracy.
+  CREGEN's own printed populations sum rotamer weights; after the GFN-FF presort
+  their degeneracy counts only how many GFN-FF conformers fell into
+  rotamer-equivalent g-xTB minima, which depends on the sampling, and CREGEN
+  uses a rounded kT. Use the plain weights. On any failure the workflow removes
+  the GFN-FF-level result files, writes _CREST_GXTB_FAILED_ and exits non-zero.
+
 *--gxtbreopt* _crest_gfnff_ensemble.xyz_::
   Replay only the post-sampling stage (presort, g-xTB re-optimization, final
   CREGEN) on a stored _crest_gfnff_ensemble.xyz. The first argument is the

@@ -1117,6 +1117,11 @@ subroutine parseflags(env,arg,nra)
           ctmp = ctmp//dtmp
         end if
         if (env%properties == p_isomerize) then
+          if (index(argument,':gxtb') > 0) then
+            write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb does not combine with the stereoisomer (-isomerize) mode.'
+            flush (stderr)
+            error stop 1
+          end if
           ctmp = 'stereoisomers'
         end if
         select case (ctmp) !> GFN
@@ -1148,7 +1153,20 @@ subroutine parseflags(env,arg,nra)
             if (.not.allocated(env%gxtb_optlevel)) env%gxtb_optlevel = 'tight'
             if (i < nra) then
               atmp = adjustl(arg(i+1))
-              if (gxtb_level_is_valid(trim(atmp))) env%gxtb_optlevel = trim(atmp)
+              if (atmp(1:1) /= '-'.and.len_trim(atmp) > 0) then
+                if (gxtb_level_is_valid(trim(atmp))) then
+                  env%gxtb_optlevel = trim(atmp)
+                else
+                  inquire (file=trim(atmp),exist=ex)
+                  if (.not.ex) then
+                    write (stderr,'(/,a)') '**ERROR** '//trim(argument)//': "'//trim(atmp)// &
+                    & '" is neither an optimization level (crude sloppy loose lax normal tight vtight extreme)'// &
+                    & ' nor an existing input file.'
+                    flush (stderr)
+                    error stop 1
+                  end if
+                end if
+              end if
             end if
             write (*,'(2x,a,a,a)') trim(argument),' : g-xTB gas-phase re-optimization, level ', &
             & env%gxtb_optlevel
@@ -2542,6 +2560,40 @@ subroutine parseflags(env,arg,nra)
         flush (stderr)
         error stop 1
       end if
+    end if
+    !>--- no other method flag may change the sampler, no TOML input file
+    do i = 1,nra
+      ctmp = trim(arg(i))
+      if (ctmp(1:2) == '--') ctmp = ctmp(2:)
+      select case (ctmp)
+      case ('-gfn','-gfn0','-gfn1','-gfn2','-gxtb','-gxtb_dev','-gfn2//gfnff','-gfn2@gfn0','-gfn2@gfn1', &
+      &     '-gfn2@gff','-gfn2@ff','-gfn2@gfnff')
+        write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb fixes the sampler (GFN-FF); the method flag '// &
+        & trim(arg(i))//' is not allowed with it.'
+        flush (stderr)
+        error stop 1
+      end select
+    end do
+    if (env%crestver /= crest_gxtbreopt.and.trim(env%gfnver) /= '--gff') then
+      write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb requires the GFN-FF sampler, but another method ('// &
+      & trim(env%gfnver)//') was selected.'
+      flush (stderr)
+      error stop 1
+    end if
+    call find_input_file(arg,nra,k)
+    if (k /= 0) then
+      write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb does not combine with a TOML input file ('//trim(arg(k))//').'
+      flush (stderr)
+      error stop 1
+    end if
+    !>--- the xtb binary: must exist, be a regular file and be executable
+    call execute_command_line("p=$(command -v '"//trim(env%ProgName)//"' 2>/dev/null) && [ -f ""$p"" ] && [ -x ""$p"" ]", &
+    &    exitstat=io,cmdstat=k)
+    if (io /= 0.or.k /= 0) then
+      write (stderr,'(/,a)') '**ERROR** the xtb binary "'//trim(env%ProgName)// &
+      & '" does not exist or is not an executable file. Select the g-xTB xtb with -xnam <path>.'
+      flush (stderr)
+      error stop 1
     end if
     do i = 1,nra
       select case (trim(arg(i)))
