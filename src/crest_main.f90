@@ -25,7 +25,7 @@ program CREST
   use crest_parameters !> Datatypes and constants
   use crest_data !> module for the main data storage (imports systemdata and timer)
   use crest_restartlog
-  use gfnff_gxtb_module,only:crest_gxtb_replay
+  use gfnff_gxtb_module,only:crest_gxtb_replay,gfnff_gxtb_stage_count
     USE, INTRINSIC :: IEEE_EXCEPTIONS
   implicit none
   type(systemdata) :: env  !> MAIN STORAGE OF SYSTEM DATA
@@ -311,6 +311,15 @@ program CREST
   case default
     continue
   end select
+
+!>--- -gfnff:gxtb must have run its g-xTB stage exactly once, otherwise the
+!>--- reported energies would silently be GFN-FF ones (or the stage file overwritten)
+  if (env%gfnff_gxtb.and.gfnff_gxtb_stage_count() /= 1) then
+    write (stderr,'(/,a,i0,a)') '**ERROR** -gfnff:gxtb: the g-xTB re-optimization stage ran ', &
+    & gfnff_gxtb_stage_count(),' time(s), expected exactly once. The results are NOT g-xTB energies.'
+    flush (stderr)
+    if (env%iostatus_meta == 0) env%iostatus_meta = status_failed
+  end if
 
   if (env%outputsdf.or.env%sdfformat) then
     if (any((/crest_mfmdgc,crest_imtd,crest_imtd2/) == env%crestver)) then

@@ -35,11 +35,23 @@ module gfnff_gxtb_module
 
   public :: crest_gfnff_gxtb_stage
   public :: crest_gxtb_replay
+  public :: gfnff_gxtb_stage_count
 
   !> the stored input of the post-sampling stage (GFN-FF energies)
   character(len=*),parameter :: stored_ensemble = 'crest_gfnff_ensemble.xyz'
 
+  !> how often the stage was entered in this program run (queried by crest_main,
+  !> which insists on exactly one run for every -gfnff:gxtb workflow)
+  integer,save :: nstage_runs = 0
+
 contains
+!================================================================================!
+
+  function gfnff_gxtb_stage_count() result(n)
+    integer :: n
+    n = nstage_runs
+  end function gfnff_gxtb_stage_count
+
 !================================================================================!
 
   subroutine crest_gfnff_gxtb_stage(env,ensemble_file)
@@ -59,6 +71,7 @@ contains
     character(len=64) :: comment
     integer,allocatable :: idx(:)
 
+    nstage_runs = nstage_runs+1
     !>--- 1. keep the GFN-FF ensemble as the stored input of this stage
     call execute_command_line("cp -f '"//ensemble_file//"' '"//stored_ensemble//"'",exitstat=io)
     if (io /= 0) then

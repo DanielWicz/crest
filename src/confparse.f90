@@ -2496,6 +2496,43 @@ subroutine parseflags(env,arg,nra)
       env%checkiso = .true.
       env%trackorigin = .true. !> as in the full search, so that the rotamer file is identical, too
     end if
+    !>--- whitelist: only the default iMTD-GC conformer search and the replay
+    !>--- run the g-xTB stage; every other workflow would return GFN-FF energies.
+    if (env%crestver /= crest_gxtbreopt) then
+      if (env%crestver /= crest_imtd.or.env%entropic.or.env%NCI.or.env%confgo &
+      &   .or.env%properties /= p_none) then
+        write (stderr,'(/,a)') '**ERROR** -gfnff:gxtb is only available for the default iMTD-GC conformer search '// &
+        & '(crest struc.xyz -gfnff:gxtb) and for --gxtbreopt;'
+        select case (env%crestver)
+        case (crest_mfmdgc);   ctmp = 'MF-MD-GC (-v1)'
+        case (crest_imtd2);    ctmp = 'iMTD-sMTD (-v4)'
+        case (crest_mdopt);    ctmp = 'ensemble optimization (--mdopt)'
+        case (crest_screen);   ctmp = 'ensemble screening (--screen)'
+        case (crest_ensemblesp); ctmp = 'ensemble singlepoints (--mdsp)'
+        case (crest_sp);       ctmp = 'singlepoint (--sp)'
+        case (crest_optimize); ctmp = 'optimization (--opt)'
+        case (crest_numhessian); ctmp = 'numerical Hessian (--numhess)'
+        case (crest_moldyn);   ctmp = 'molecular dynamics (--md)'
+        case (crest_trialopt); ctmp = 'trial optimization'
+        case (crest_nano);     ctmp = 'nano-reactor'
+        case (crest_compr);    ctmp = 'compress'
+        case (crest_msreac);   ctmp = 'msreact'
+        case (crest_solv);     ctmp = 'QCG'
+        case (crest_pka);      ctmp = 'pKa'
+        case (crest_protonate,crest_deprotonate,crest_tautomerize); ctmp = 'protonation tools'
+        case default
+          ctmp = 'this runtype'
+          if (env%crestver == crest_imtd) then
+            if (env%entropic) ctmp = 'entropy mode (-entropy)'
+            if (env%NCI) ctmp = 'NCI mode (-nci)'
+            if (env%confgo.or.env%properties /= p_none) ctmp = 'a property / CREGEN-only mode'
+          end if
+        end select
+        write (stderr,'(a)') '          not supported: '//trim(ctmp)
+        flush (stderr)
+        error stop 1
+      end if
+    end if
     do i = 1,nra
       select case (trim(arg(i)))
       case ('-rsp','--rsp','-ropt','--ropt','-refine','--refine')
