@@ -35,10 +35,11 @@ module iomod
   end interface
 
   interface
-    integer(kind=c_int) function c_setenv(c_name,c_VALUE) bind(c,name="setenv")
+    integer(kind=c_int) function c_setenv(c_name,c_VALUE,overwrite) bind(c,name="setenv")
       use iso_c_binding
       character(kind=c_char)   :: c_name(*)
       character(kind=c_char)   :: c_VALUE(*)
+      integer(kind=c_int),value :: overwrite
     end function
   end interface
   interface setenv
@@ -337,7 +338,7 @@ contains !> MODULE PROCEDURES START HERE
     integer :: setenv_string
     character(len=*) :: env
     character(len=*) :: str
-    setenv_string = c_setenv(env//c_null_char,str//c_null_char) !create new directory
+    setenv_string = c_setenv(env//c_null_char,str//c_null_char,1_c_int)
     return
   end function setenv_string
   function setenv_int(env,intval)
@@ -347,7 +348,7 @@ contains !> MODULE PROCEDURES START HERE
     integer :: intval
     character(len=20) :: str
     write (str,'(i0)') intval
-    setenv_int = c_setenv(env//c_null_char,trim(str)//c_null_char) !create new directory
+    setenv_int = c_setenv(env//c_null_char,trim(str)//c_null_char,1_c_int)
     return
   end function setenv_int
   function setenv_float(env,floatval)
@@ -357,7 +358,7 @@ contains !> MODULE PROCEDURES START HERE
     real(wp) :: floatval
     character(len=30) :: str
     write (str,'(f14.6)') floatval
-    setenv_float = c_setenv(env//c_null_char,trim(str)//c_null_char) !create new directory
+    setenv_float = c_setenv(env//c_null_char,trim(str)//c_null_char,1_c_int)
     return
   end function setenv_float
 
