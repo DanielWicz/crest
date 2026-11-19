@@ -218,8 +218,8 @@ resulting ensemble with a better one.
   geometry. *topo* compares the connectivity (neighbour lists, as CREGEN's
   topology check) with the input structure only; it does **not** detect E/Z or
   other stereochemical changes, so the caller applies its own structural and
-  stereo checks. _crest_gxtb_populations.dat is not written in this mode.
-  The weights in _crest_gxtb_populations.dat (other modes) are computed from
+  stereo checks. _crest_gxtb_populations.dat_ is not written in this mode.
+  The weights in _crest_gxtb_populations.dat_ (other modes) are computed from
   the 8-decimal energies of _crest_conformers.xyz.
 
   Example: `crest struc.xyz -gfnff:gxtb tight -T 8 -xnam /path/to/xtb`

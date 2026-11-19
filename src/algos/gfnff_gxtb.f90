@@ -39,6 +39,7 @@ module gfnff_gxtb_module
   public :: crest_gxtb_replay
   public :: gfnff_gxtb_stage_count
   public :: gxtb_flag_failure
+  public :: gxtb_claim_result_files
   public :: gxtb_clear_failure_marker
   public :: gxtb_write_populations
 
@@ -356,6 +357,11 @@ contains
     close (ich)
     write (stderr,'(a)') '**ERROR** gxtb workflow failed ('//trim(reason)//'); see '//failure_marker
   end subroutine gxtb_flag_failure
+
+  subroutine gxtb_claim_result_files()
+    !> a full -gfnff:gxtb search always writes the result files in its directory
+    run_writes_results = .true.
+  end subroutine gxtb_claim_result_files
 
   subroutine gxtb_clear_failure_marker()
     call remove(failure_marker)

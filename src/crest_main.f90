@@ -26,7 +26,7 @@ program CREST
   use crest_data !> module for the main data storage (imports systemdata and timer)
   use crest_restartlog
   use gfnff_gxtb_module,only:crest_gxtb_replay,gfnff_gxtb_stage_count,gxtb_flag_failure, &
-  &   gxtb_clear_failure_marker,gxtb_write_populations
+  &   gxtb_clear_failure_marker,gxtb_write_populations,gxtb_claim_result_files
     USE, INTRINSIC :: IEEE_EXCEPTIONS
   implicit none
   type(systemdata) :: env  !> MAIN STORAGE OF SYSTEM DATA
@@ -237,6 +237,7 @@ program CREST
 !>         MAIN WORKFLOW CALLS START HERE
 !=========================================================================================!
 !> many of these routine calls take a detour through legacy_wrappers.f90 !
+  if (env%gfnff_gxtb.and.env%crestver == crest_imtd) call gxtb_claim_result_files() !> full search
   select case (env%crestver)
   case (crest_mfmdgc)           !> MF-MD-GC algo (deprecated)
     call confscript1(env,tim)
