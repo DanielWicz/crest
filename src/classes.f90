@@ -622,6 +622,7 @@ module crest_data
     logical :: refine_presort = .false.  !> run CREGEN at the beginning of crest_refine?
     !> -gfnff:gxtb : GFN-FF sampling, then gas-phase g-xTB re-optimization of the final ensemble
     logical :: gfnff_gxtb = .false.
+    logical :: gxtb_nocregen = .false. !> --gxtbreopt -nocregen: re-optimize exactly the given structures, no CREGEN
     character(len=:),allocatable :: gxtb_optlevel !> xtb optimization level word of that re-optimization
     logical :: refine_esort   = .false.  !> if CREGEN is run after crest_refine, only sort energy?
     logical :: sameRandomNumber = .false. !> QCG related, choose same random number for iff

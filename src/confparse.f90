@@ -1206,6 +1206,9 @@ subroutine parseflags(env,arg,nra)
           write (*,'(2x,a,a)') argument,' : energy reweighting'
         end if
 
+      case ('-nocregen')
+        env%gxtb_nocregen = .true.
+
       case ('-refineonce','-rfinal')
         !> Restrict the rescoring to the FINAL ensemble optimization instead of
         !> running it after every multilevel stage. See crest_multilevel_oloop
@@ -2481,6 +2484,13 @@ subroutine parseflags(env,arg,nra)
       write (stdout,'(a)') '> which are selected automatically for this runtype (as with -newversion)'
       env%legacy = .false.
     end if
+  end if
+
+!>--- -nocregen belongs to --gxtbreopt only
+  if (env%gxtb_nocregen.and.env%crestver /= crest_gxtbreopt) then
+    write (stderr,'(/,a)') '**ERROR** -nocregen is only valid together with --gxtbreopt.'
+    flush (stderr)
+    error stop 1
   end if
 
 !>--- -gfnff:gxtb / --gxtbreopt: settings and guards (all arguments are parsed now)

@@ -108,6 +108,7 @@ contains
     call system_clock(t0,rate)
     call reopt%reoptimize(nat,nall,at,xyz,eread,ok)
     call system_clock(t1)
+    call reopt%cleanup()
 
     !>--- 4. summary
     idx = reopt%failed_indices()
@@ -171,6 +172,11 @@ contains
       env%iostatus_meta = status_input
       return
     end if
+    if (env%gxtb_nocregen) then
+      call reoptimize_given_structures(env,nat,nall)
+      call tim%stop(14)
+      return
+    end if
     write (stdout,*)
     write (stdout,'(3x,a)') '====================================================='
     write (stdout,'(3x,a)') '|  g-xTB gas-phase re-optimization (replay)          |'
@@ -193,5 +199,68 @@ contains
     call V2terminating()
     call tim%stop(14)
   end subroutine crest_gxtb_replay
+
+!================================================================================!
+
+  subroutine reoptimize_given_structures(env,nat_in,nall_in)
+    !> "--gxtbreopt <file> -nocregen": no CREGEN of any kind, no energy window,
+    !> no merging, no topology filter. Every structure of the file, in file
+    !> order, is re-optimized; crest_gxtb_reopt.xyz holds one block per INPUT
+    !> index. This path counts as the one run of the stage (nstage_runs), so
+    !> the "ran exactly once" assertion of crest_main holds here as well.
+    type(systemdata),intent(inout) :: env
+    integer,intent(in) :: nat_in,nall_in
+    integer :: nat,nall
+    character(len=*),parameter :: outfile = 'crest_gxtb_reopt.xyz'
+    type(gxtb_reoptimizer) :: reopt
+    integer,allocatable :: at(:),idx(:)
+    real(wp),allocatable :: xyz(:,:,:),eread(:)
+    logical,allocatable :: ok(:)
+    logical :: good,written
+    integer :: t0,t1,rate,k
+    character(len=512) :: cdir
+    character(len=:),allocatable :: cwd,line
+    character(len=32) :: ctmp
+
+    nstage_runs = nstage_runs+1
+    nat = nat_in
+    nall = nall_in
+    call rdensemble(env%ensemblename,nat,nall,at,xyz,eread)
+    allocate (ok(nall))
+    call getcwd(cdir)
+    cwd = trim(cdir)
+    call reopt%init(trim(env%ProgName),env%chrg,env%uhf,env%gxtb_optlevel,max(1,env%threads), &
+    &    cwd//'/.gxtb_reopt',env%keepModef,good)
+    if (.not.good) then
+      write (stderr,'(a)') '**ERROR** invalid g-xTB re-optimization settings.'
+      env%iostatus_meta = status_failed
+      return
+    end if
+    write (stdout,'(/,1x,a)') 'g-xTB gas-phase re-optimization of the given structures (no CREGEN)'
+    call system_clock(t0,rate)
+    call reopt%reoptimize(nat,nall,at,xyz,eread,ok)
+    call system_clock(t1)
+    call reopt%write_results(outfile,nat,nall,ok,written)
+    call reopt%cleanup()
+    idx = reopt%failed_indices()
+    write (stdout,'(3x,a,i0)') 'structures in the input file      : ',nall
+    write (stdout,'(3x,a,i0)') 'successfully re-optimized         : ',count(ok)
+    write (stdout,'(3x,a,i0)') 'failed (ok=0 in the output)       : ',reopt%nfailed()
+    if (size(idx) > 0) then
+      line = ''
+      do k = 1,size(idx)
+        write (ctmp,'(i0)') idx(k)
+        line = line//' '//trim(ctmp)
+      end do
+      write (stdout,'(3x,a)') 'failed structure indices (1-based)  :'//line
+    end if
+    write (stdout,'(3x,a,f10.2,a)') 'wall time                         : ', &
+    &    real(t1-t0,wp)/real(rate,wp),' s'
+    write (stdout,'(3x,a)') 'results written to '//outfile
+    if (.not.written) then
+      write (stderr,'(a)') '**ERROR** could not write '//outfile
+      env%iostatus_meta = status_failed
+    end if
+  end subroutine reoptimize_given_structures
 
 end module gfnff_gxtb_module

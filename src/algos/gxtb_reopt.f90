@@ -57,6 +57,8 @@ module gxtb_reopt_module
   contains
     procedure,public :: init => reopt_init
     procedure,public :: reoptimize => reopt_run
+    procedure,public :: write_results => reopt_write_results
+    procedure,public :: cleanup => reopt_cleanup
     procedure,public :: nfailed => reopt_nfailed
     procedure,public :: failed_indices => reopt_failed_indices
     procedure,private :: run_one => reopt_run_one
@@ -140,10 +142,105 @@ contains
         self%failed(nfail) = k
       end if
     end do
-    if (.not.self%keep) then
-      call execute_command_line("rm -rf '"//self%scratch//"'",exitstat=io)
-    end if
   end subroutine reopt_run
+
+!================================================================================!
+
+  subroutine reopt_cleanup(self)
+    !> Remove the scratch directories (exact path), unless they are to be kept.
+    !> Separate from reoptimize: the results files are still needed afterwards.
+    class(gxtb_reoptimizer),intent(inout) :: self
+    integer :: io
+    if (.not.self%ready .or. self%keep) return
+    call execute_command_line("rm -rf '"//self%scratch//"'",exitstat=io)
+  end subroutine reopt_cleanup
+
+!================================================================================!
+
+  subroutine reopt_write_results(self,fname,nat,nall,ok,written)
+    !> Write one block per input index (input order) to fname, atomically.
+    !> Success: xtb's energy/gnorm text and coordinate lines are copied
+    !> verbatim from xtbopt.xyz (no float re-formatting). Failure: energy=nan,
+    !> gnorm=nan and the input geometry (xtbinp.xyz). Needs the scratch
+    !> directories of the last reoptimize call (call cleanup afterwards).
+    class(gxtb_reoptimizer),intent(in) :: self
+    character(len=*),intent(in) :: fname
+    integer,intent(in) :: nat,nall
+    logical,intent(in) :: ok(nall)
+    logical,intent(out) :: written
+    integer :: och,ich,k,j,io,p
+    character(len=:),allocatable :: dir,tmpname,etxt,gtxt
+    character(len=512) :: line
+    character(len=16) :: ctmp
+    written = .false.
+    if (.not.self%ready .or. nall < 1) return
+    tmpname = trim(fname)//'.tmp'
+    open (newunit=och,file=tmpname,status='replace',iostat=io)
+    if (io /= 0) return
+    do k = 1,nall
+      write (ctmp,'(i0)') k
+      dir = self%scratch//'/s'//trim(ctmp)
+      etxt = 'nan'
+      gtxt = 'nan'
+      if (ok(k)) then
+        open (newunit=ich,file=dir//'/xtbopt.xyz',status='old',iostat=io)
+      else
+        open (newunit=ich,file=dir//'/xtbinp.xyz',status='old',iostat=io)
+      end if
+      if (io /= 0) then
+        close (och,status='delete')
+        return
+      end if
+      read (ich,'(a)',iostat=io) line     !> atom count line
+      read (ich,'(a)',iostat=io) line     !> comment line
+      if (ok(k)) then
+        etxt = token_after(line,'energy:')
+        gtxt = token_after(line,'gnorm:')
+        if (len(etxt) < 1 .or. len(gtxt) < 1) then
+          close (ich)
+          close (och,status='delete')
+          return
+        end if
+      end if
+      write (och,'(i0)') nat
+      write (och,'(a,i0,a,i0,a)') 'index=',k,' ok=',merge(1,0,ok(k)),' energy='//etxt// &
+      & ' gnorm='//gtxt//' level='//self%level
+      do j = 1,nat
+        read (ich,'(a)',iostat=io) line
+        if (io /= 0) then
+          close (ich)
+          close (och,status='delete')
+          return
+        end if
+        write (och,'(a)') trim(line)
+      end do
+      close (ich)
+    end do
+    close (och)
+    call rename(tmpname,trim(fname),status=io)
+    written = (io == 0)
+  end subroutine reopt_write_results
+
+  function token_after(line,key) result(tok)
+    !> whitespace-delimited token following "key" in line ('' if absent)
+    character(len=*),intent(in) :: line,key
+    character(len=:),allocatable :: tok
+    integer :: p,q
+    tok = ''
+    p = index(line,key)
+    if (p == 0) return
+    p = p+len(key)
+    do while (p <= len_trim(line))
+      if (line(p:p) /= ' ') exit
+      p = p+1
+    end do
+    q = p
+    do while (q <= len_trim(line))
+      if (line(q:q) == ' ') exit
+      q = q+1
+    end do
+    if (q > p) tok = line(p:q-1)
+  end function token_after
 
 !================================================================================!
 
